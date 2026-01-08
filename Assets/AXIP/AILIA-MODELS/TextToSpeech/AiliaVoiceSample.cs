@@ -36,6 +36,7 @@ public class AiliaVoiceSample : MonoBehaviour
 	private AiliaVoiceModel voice = new AiliaVoiceModel();
 	private string before_ref_clip_name = "";
 	private bool model_downloading = false;
+    private Task t = null;
 
 	// model download
 	private AiliaDownload ailia_download = new AiliaDownload();
@@ -113,6 +114,8 @@ public class AiliaVoiceSample : MonoBehaviour
 			urlList.Add(new ModelDownloadURL() { folder_path = "gpt-sovits", file_name = "t2s_sdec.opt3.onnx" });
 			urlList.Add(new ModelDownloadURL() { folder_path = "gpt-sovits", file_name = "vits.onnx" });
 			urlList.Add(new ModelDownloadURL() { folder_path = "gpt-sovits", file_name = "cnhubert.onnx" });
+
+			urlList.Add(new ModelDownloadURL() { folder_path = "gpt-sovits-v3", file_name = "user.dict" });
 		}
 
 		AiliaDownload ailia_download = new AiliaDownload();
@@ -121,6 +124,11 @@ public class AiliaVoiceSample : MonoBehaviour
 		StartCoroutine(ailia_download.DownloadWithProgressFromURL(urlList, () =>
 		{
 			if (modelType == TextToSpeechSampleModels.gpt_sovits_japanese || modelType == TextToSpeechSampleModels.gpt_sovits_english){
+				status = voice.SetUserDictionary(path + "user.dict", AiliaVoice.AILIA_VOICE_DICTIONARY_TYPE_OPEN_JTALK);
+				if (status == false) {
+					Debug.Log("SetUserDictionary failed");
+					return;
+				}
 				status = voice.OpenDictionary(path, AiliaVoice.AILIA_VOICE_DICTIONARY_TYPE_OPEN_JTALK);
 				if (status == false){
 					Debug.Log("OpenDictionary failed");
@@ -159,7 +167,7 @@ public class AiliaVoiceSample : MonoBehaviour
 			if (ref_clip.name != before_ref_clip_name){
 				string label = "水をマレーシアから買わなくてはならない。";
 				Debug.Log("Label : " + label);
-				string ref_text = voice.G2P(label, AiliaVoice.AILIA_VOICE_TEXT_POST_PROCESS_APPEND_PUNCTUATION);
+				string ref_text = voice.G2P(label, AiliaVoice.AILIA_VOICE_G2P_TYPE_GPT_SOVITS_JA);
 				voice.SetReference(ref_clip, ref_text);
 				before_ref_clip_name = ref_clip.name;
 			}
@@ -175,7 +183,7 @@ public class AiliaVoiceSample : MonoBehaviour
 
 		var context = SynchronizationContext.Current;
 
-		Task.Run(async () =>
+		t = Task.Run(async () =>
 		{
 			isProcessing = true;
 
@@ -190,6 +198,7 @@ public class AiliaVoiceSample : MonoBehaviour
 				clip = voice.GetAudioClip();
 				if (status == null){
 					Debug.Log("Inference failed");
+					isProcessing = false;
 					return;
 				}
 
@@ -207,12 +216,18 @@ public class AiliaVoiceSample : MonoBehaviour
 
 	void OnDisable(){
 		Debug.Log("OnDisable");
+		if (t != null){
+			t.Wait();
+		}
 		voice.Close();
 		initialized = false;
 	}
 
 	void OnApplicationQuit(){
 		Debug.Log("OnApplicationQuit");
+		if (t != null){
+			t.Wait();
+		}
 		voice.Close();
 		initialized = false;
 	}
