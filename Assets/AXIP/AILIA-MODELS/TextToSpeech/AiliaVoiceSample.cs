@@ -173,6 +173,7 @@ public class AiliaVoiceSample : MonoBehaviour
 			}
 		}
 		if (modelType == TextToSpeechSampleModels.gpt_sovits_japanese){
+			text = text.ToLower(); // ユーザ辞書に合わせて小文字にする
 			text = voice.G2P(text, AiliaVoice.AILIA_VOICE_G2P_TYPE_GPT_SOVITS_JA);
 		}
 		if (modelType == TextToSpeechSampleModels.gpt_sovits_english){
