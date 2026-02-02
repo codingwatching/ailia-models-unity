@@ -268,10 +268,10 @@ namespace ailiaSDK
             //Clear result
             Clear();
 
-            //Get camera image
+            //Get camera image (B2T)
             Color32[] camera = ailia_camera.GetPixels32();
             int original_width = ailia_camera.GetWidth();
-            int original_height = ailia_camera.GetHeight();      
+            int original_height = ailia_camera.GetHeight();
 
             if (!video_mode)
             {

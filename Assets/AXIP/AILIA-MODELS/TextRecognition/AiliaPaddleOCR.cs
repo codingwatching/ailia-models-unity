@@ -73,10 +73,11 @@ namespace ailiaSDK
 			if (x2 >= w || y2 >= h || x2 < 0 || y2 < 0){
 				return new Color32(0, 0, 0, 255);
 			}
-			Color32 c1 = img[y2 * w + x2];
-			Color32 c2 = (x2+1 < w) ? img[y2 * w + x2 + 1] : c1;
-			Color32 c3 = (y2+1 < h) ? img[(y2 + 1) * w + x2] : c1;
-			Color32 c4 = (x2+1 < w && y2+1 < h) ? img[(y2 + 1) * w + x2 + 1] : c1;
+			int y3 = h - 1 - y2; // B2T to T2B
+			Color32 c1 = img[y3 * w + x2];
+			Color32 c2 = (x2+1 < w) ? img[y3 * w + x2 + 1] : c1;
+			Color32 c3 = (y2+1 < h) ? img[(y3 - 1) * w + x2] : c1;
+			Color32 c4 = (x2+1 < w && y2+1 < h) ? img[(y3 - 1) * w + x2 + 1] : c1;
 			byte r = (byte)(c1.r * xa * ya + c2.r * xb * ya + c3.r * xa * yb + c4.r * xb * yb);
 			byte g = (byte)(c1.g * xa * ya + c2.g * xb * ya + c3.g * xa * yb + c4.g * xb * yb);
 			byte b = (byte)(c1.b * xa * ya + c2.b * xb * ya + c3.b * xa * yb + c4.b * xb * yb);
@@ -111,14 +112,6 @@ namespace ailiaSDK
 				{
 					float fx = x * scale;
 					float fy = y * scale;
-
-					if (fx < 0 || fy < 0 || fx >= tex_width || fy >= tex_height)
-					{
-						data[(y * w + x) + 0 * w * h] = 0;
-						data[(y * w + x) + 1 * w * h] = 0;
-						data[(y * w + x) + 2 * w * h] = 0;
-						continue;
-					}
 
 					Color32 v = Bilinear(camera, tex_width, tex_height, fx, fy);
 
