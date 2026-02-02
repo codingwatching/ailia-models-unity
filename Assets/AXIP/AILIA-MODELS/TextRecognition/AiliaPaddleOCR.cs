@@ -32,7 +32,7 @@ namespace ailiaSDK
 
 		public const float DETECTION_THRESH = 0.3f;
 
-		public const int LIMITED_MAX_WIDTH = 1280;
+		public int LIMITED_MAX_WIDTH = 1280;
     	public const int LIMITED_MIN_WIDTH = 16;
 
 		public const int PADDLEOCR_CLASSIFIER_INPUT_BATCH_SIZE = 1;
@@ -41,13 +41,22 @@ namespace ailiaSDK
 		public const int PADDLEOCR_CLASSIFIER_INPUT_WIDTH_SIZE = 192;
 		
 		public const int PADDLEOCR_RECOGNITION_CHANNEL_COUNT = 3;
-		public const int PADDLEOCR_RECOGNITION_IMAGE_HEIGHT = 32;
+		public int PADDLEOCR_RECOGNITION_IMAGE_HEIGHT = 32;
 		public const int PADDLEOCR_RECOGNITION_IMAGE_WIDTH = 320;
 
 		public const int CAMERA_HEIGHT = 1080;
 		public const int CAMERA_WIDTH = 1920;
 
 		public const int IMAGE_SCALE = 1; //処理を軽くするために画像のサイズを調整
+
+
+		public void SetVersion(int version)
+		{
+			if (version == 3) {
+				LIMITED_MAX_WIDTH = 3200;
+				PADDLEOCR_RECOGNITION_IMAGE_HEIGHT = 48;
+			}
+		}
 
 
 		public struct TextInfo
@@ -90,7 +99,7 @@ namespace ailiaSDK
 
 
 			uint[] input_blobs = ailia_model.GetInputBlobList();
-			int inputBlobIndex = ailia_model.FindBlobIndexByName("input");
+			uint inputBlobIndex = input_blobs[0];
 
 			//SetInputBlobShape
 			status = ailia_model.SetInputBlobShape(
@@ -128,7 +137,8 @@ namespace ailiaSDK
 
 			//Get(Output)BlobData
 			float[] box_data = new float[PADDLEOCR_DETECTOR_OUTPUT_BATCH_SIZE * PADDLEOCR_DETECTOR_OUTPUT_CHANNEL_COUNT * PADDLEOCR_DETECTOR_OUTPUT_HEIGHT_SIZE * PADDLEOCR_DETECTOR_OUTPUT_WIDTH_SIZE];
-			int outputBlobIndex = ailia_model.FindBlobIndexByName("output");
+			uint[] output_blobs = ailia_model.GetOutputBlobList();
+			uint outputBlobIndex = output_blobs[0];
 			status = ailia_model.GetBlobData(box_data, outputBlobIndex);
 			if (status == false)
 			{
@@ -136,9 +146,6 @@ namespace ailiaSDK
 				Debug.LogError(ailia_model.GetErrorDetail());
 			}
 
-
-
-			uint[] output_blobs = ailia_model.GetOutputBlobList();
 			//Debug.Log(string.Join(",", output_blobs)); //152
 
 			Ailia.AILIAShape box_shape = ailia_model.GetBlobShape((int)output_blobs[0]);
@@ -204,7 +211,7 @@ namespace ailiaSDK
 
 					uint[] input_blobs = ailia_model.GetInputBlobList();
 					//Debug.Log(string.Join(",", input_blobs)); //0
-					int inputBlobIndex = ailia_model.FindBlobIndexByName("input");
+					uint inputBlobIndex = input_blobs[0];
 					// Debug.Log(inputBlobIndex); //0			
 					status = ailia_model.SetInputBlobShape(
 						new Ailia.AILIAShape
@@ -242,7 +249,7 @@ namespace ailiaSDK
 					int OUTPUT_CHANNEL_COUNT = (int)box_shape.x;
 					int OUTPUT_BATCH_SIZE = (int)box_shape.y;
 					float[] out_data = new float[OUTPUT_CHANNEL_COUNT * OUTPUT_BATCH_SIZE];
-					int outputBlobIndex = ailia_model.FindBlobIndexByName("output");
+					uint outputBlobIndex = output_blobs[0];
 					status = ailia_model.GetBlobData(out_data, outputBlobIndex);
 					if (status == false)
 					{
@@ -306,7 +313,7 @@ namespace ailiaSDK
 				
 					int INPUT_BATCH_SIZE = 1;
 					int INPUT_CHANNEL_COUNT = 3;
-					int INPUT_HEIGHT_SIZE = 32;
+					int INPUT_HEIGHT_SIZE = PADDLEOCR_RECOGNITION_IMAGE_HEIGHT;
 					int INPUT_WIDTH_SIZE = ROI_list[r].GetLength(1);
 
 
@@ -328,7 +335,7 @@ namespace ailiaSDK
 
 					uint[] input_blobs = ailia_model.GetInputBlobList();
 					//Debug.Log(string.Join(",", input_blobs)); //0
-					int inputBlobIndex = ailia_model.FindBlobIndexByName("input");
+					uint inputBlobIndex = input_blobs[0];
 					// Debug.Log(inputBlobIndex); //0			
 					status = ailia_model.SetInputBlobShape(
 						new Ailia.AILIAShape
@@ -370,7 +377,7 @@ namespace ailiaSDK
 					int OUTPUT_CHANNEL_COUNT = (int)box_shape.z;
 					int OUTPUT_BATCH_SIZE = (int)box_shape.w;
 					float[] out_data = new float[OUTPUT_BATCH_SIZE * OUTPUT_CHANNEL_COUNT * OUTPUT_HEIGHT_SIZE * OUTPUT_WIDTH_SIZE];
-					int outputBlobIndex = ailia_model.FindBlobIndexByName("output");
+					uint outputBlobIndex = output_blobs[0];
 					status = ailia_model.GetBlobData(out_data, outputBlobIndex);
 					if (status == false)
 					{
@@ -771,14 +778,12 @@ namespace ailiaSDK
 					int sourceX = (int)(x * widthRatio);
 					int sourceY = (int)(y * heightRatio);
 
-					if (sourceX >= w)
+					if (sourceX >= w || sourceY >= h)
 					{
-						sourceX = w - 1;
-					}
-
-					if (sourceY >= h)
-					{
-						sourceY = h - 1;
+						for (int c = 0; c < imgC; c++){
+							resizedImg[c, x, y] = 127.5f;
+						}
+						continue;
 					}
 
 					for (int c = 0; c < imgC; c++){

@@ -15,7 +15,8 @@ namespace ailiaSDK
     {
         public enum TextRecognizerModels
         {
-            PaddleOCR,
+            PaddleOCRV1,
+            PaddleOCRV3,
             Debug
         }
 
@@ -42,7 +43,7 @@ namespace ailiaSDK
         }
 
         [SerializeField]
-        private TextRecognizerModels ailiaModelType = TextRecognizerModels.PaddleOCR;
+        private TextRecognizerModels ailiaModelType = TextRecognizerModels.PaddleOCRV1;
         [SerializeField]
         private Language language = Language.Japanese;
         [SerializeField]
@@ -96,60 +97,69 @@ namespace ailiaSDK
                 ailia_text_recognizer.Environment(Ailia.AILIA_ENVIRONMENT_TYPE_GPU);
             }
 
-            var weight_path_detection = "chi_eng_num_sym_server_det_org.onnx";
-            var weight_path_classification = "chi_eng_num_sym_mobile_cls_org.onnx";
-            var weight_path_recognition = "";
-            var txt_file_dir = "Assets/AXIP/AILIA-MODELS/TextRecognition/Dict/";
             var dict_path = "";
 
-            switch (language)
-            {
-                case Language.Japanese:
-                    if (modelSize == ModelSize.Server){
-                        weight_path_recognition = "jpn_eng_num_sym_server_rec_add.onnx";
-                        dict_path = txt_file_dir + "jpn_eng_num_sym_add.txt";
-                    }else{
-                        weight_path_recognition = "jpn_eng_num_sym_mobile_rec_org.onnx";
-                        dict_path = txt_file_dir + "jpn_eng_num_sym_org.txt";
-                    }
-                    break;
-                case Language.English:
-                    weight_path_recognition = "eng_num_sym_mobile_rec_org.onnx";
-                    dict_path = txt_file_dir + "eng_num_sym_org.txt";
-                    break;
-                case Language.Chinese:
-                    if (modelSize == ModelSize.Server){
-                        weight_path_recognition = "chi_eng_num_sym_server_rec_org.onnx";
-                        dict_path = txt_file_dir + "chi_eng_num_sym_org.txt";
-                    }else{
-                        weight_path_recognition = "chi_eng_num_sym_mobile_rec_org.onnx";
-                        dict_path = txt_file_dir + "chi_eng_num_sym_org.txt";
-                    }
-                    break;
-                case Language.German:
-                    weight_path_recognition = "ger_eng_num_sym_mobile_rec_org.onnx";
-                    dict_path = txt_file_dir + "ger_eng_num_sym_org.txt";
-                    break;
-                case Language.French:
-                    weight_path_recognition = "fre_eng_num_sym_mobile_rec_org.onnx";
-                    dict_path = txt_file_dir + "fre_eng_num_sym_org.txt";
-                    break;
-                case Language.Korean:
-                    weight_path_recognition = "kor_eng_num_sym_mobile_rec_org.onnx";
-                    dict_path = txt_file_dir + "kor_eng_num_sym_org.txt";
-                    break;
-                default:
-                    Debug.Log("Others language are working in progress.");
-                    break;
-            }
+            var weight_path_detection = "";
+            var weight_path_classification = "";
+            var weight_path_recognition = "";
+
+            var model_path_detection = "";
+            var model_path_classification = "";
+            var model_path_recognition = "";
+
             switch (ailiaModelType)
             {
-                case TextRecognizerModels.PaddleOCR:
-                    mode_text.text = "ailia text Recognizer";
+                case TextRecognizerModels.PaddleOCRV1:
+                    mode_text.text = "ailia text Recognizer (V1)";
 
-                    var model_path_detection = weight_path_detection + ".prototxt";
-                    var model_path_classification = weight_path_classification + ".prototxt";
-                    var model_path_recognition = weight_path_recognition + ".prototxt";
+                    weight_path_detection = "chi_eng_num_sym_server_det_org.onnx";
+                    weight_path_classification = "chi_eng_num_sym_mobile_cls_org.onnx";
+                    weight_path_recognition = "";
+
+                    switch (language)
+                    {
+                        case Language.Japanese:
+                            if (modelSize == ModelSize.Server){
+                                weight_path_recognition = "jpn_eng_num_sym_server_rec_add.onnx";
+                                dict_path = "jpn_eng_num_sym_add.txt";
+                            }else{
+                                weight_path_recognition = "jpn_eng_num_sym_mobile_rec_org.onnx";
+                                dict_path = "jpn_eng_num_sym_org.txt";
+                            }
+                            break;
+                        case Language.English:
+                            weight_path_recognition = "eng_num_sym_mobile_rec_org.onnx";
+                            dict_path = "eng_num_sym_org.txt";
+                            break;
+                        case Language.Chinese:
+                            if (modelSize == ModelSize.Server){
+                                weight_path_recognition = "chi_eng_num_sym_server_rec_org.onnx";
+                                dict_path = "chi_eng_num_sym_org.txt";
+                            }else{
+                                weight_path_recognition = "chi_eng_num_sym_mobile_rec_org.onnx";
+                                dict_path = "chi_eng_num_sym_org.txt";
+                            }
+                            break;
+                        case Language.German:
+                            weight_path_recognition = "ger_eng_num_sym_mobile_rec_org.onnx";
+                            dict_path = "ger_eng_num_sym_org.txt";
+                            break;
+                        case Language.French:
+                            weight_path_recognition = "fre_eng_num_sym_mobile_rec_org.onnx";
+                            dict_path = "fre_eng_num_sym_org.txt";
+                            break;
+                        case Language.Korean:
+                            weight_path_recognition = "kor_eng_num_sym_mobile_rec_org.onnx";
+                            dict_path = "kor_eng_num_sym_org.txt";
+                            break;
+                        default:
+                            Debug.Log("Others language are working in progress.");
+                            break;
+                    }
+
+                    model_path_detection = weight_path_detection + ".prototxt";
+                    model_path_classification = weight_path_classification + ".prototxt";
+                    model_path_recognition = weight_path_recognition + ".prototxt";
 
                     urlList.Add(new ModelDownloadURL() { folder_path = "paddle_ocr", file_name = model_path_detection });
                     urlList.Add(new ModelDownloadURL() { folder_path = "paddle_ocr", file_name = weight_path_detection });
@@ -157,9 +167,48 @@ namespace ailiaSDK
                     urlList.Add(new ModelDownloadURL() { folder_path = "paddle_ocr", file_name = weight_path_classification });
                     urlList.Add(new ModelDownloadURL() { folder_path = "paddle_ocr", file_name = model_path_recognition });
                     urlList.Add(new ModelDownloadURL() { folder_path = "paddle_ocr", file_name = weight_path_recognition });
+                    urlList.Add(new ModelDownloadURL() { folder_path = "paddle_ocr", file_name = dict_path });
+
+                    paddle_ocr.SetVersion(1);
 
                     StartCoroutine(ailia_download.DownloadWithProgressFromURL(urlList, () =>
                     {
+                        FileOpened = ailia_text_detector.OpenFile(asset_path + "/" + model_path_detection, asset_path + "/" + weight_path_detection);
+                        FileOpened = ailia_text_classificator.OpenFile(asset_path + "/" + model_path_classification, asset_path + "/" + weight_path_classification);
+                        FileOpened = ailia_text_recognizer.OpenFile(asset_path + "/" + model_path_recognition, asset_path + "/" + weight_path_recognition);
+                    }));
+                    break;
+
+                case TextRecognizerModels.PaddleOCRV3:
+                    mode_text.text = "ailia text Recognizer (V3)";
+                    dict_path = "PP-OCRv5_rec.txt";
+
+                    weight_path_detection = "PP-OCRv5_mobile_det_infer.onnx";
+                    weight_path_classification = "chi_eng_num_sym_mobile_cls_org.onnx";
+                    weight_path_recognition = "PP-OCRv5_mobile_rec_infer.onnx";
+
+                    if (modelSize == ModelSize.Server){
+                        weight_path_detection = "PP-OCRv5_server_det_infer.onnx";
+                        weight_path_recognition = "PP-OCRv5_server_rec_infer.onnx";
+                    }
+
+                    model_path_detection = weight_path_detection + ".prototxt";
+                    model_path_classification = weight_path_classification + ".prototxt";
+                    model_path_recognition = weight_path_recognition + ".prototxt";
+
+                    urlList.Add(new ModelDownloadURL() { folder_path = "paddle_ocr_v3", file_name = model_path_detection });
+                    urlList.Add(new ModelDownloadURL() { folder_path = "paddle_ocr_v3", file_name = weight_path_detection });
+                    urlList.Add(new ModelDownloadURL() { folder_path = "paddle_ocr", file_name = model_path_classification });
+                    urlList.Add(new ModelDownloadURL() { folder_path = "paddle_ocr", file_name = weight_path_classification });
+                    urlList.Add(new ModelDownloadURL() { folder_path = "paddle_ocr_v3", file_name = model_path_recognition });
+                    urlList.Add(new ModelDownloadURL() { folder_path = "paddle_ocr_v3", file_name = weight_path_recognition });
+                    urlList.Add(new ModelDownloadURL() { folder_path = "paddle_ocr_v3", file_name = dict_path });
+
+                    paddle_ocr.SetVersion(3);
+
+                    StartCoroutine(ailia_download.DownloadWithProgressFromURL(urlList, () =>
+                    {
+                        LoadDictionary(asset_path, dict_path);
                         FileOpened = ailia_text_detector.OpenFile(asset_path + "/" + model_path_detection, asset_path + "/" + weight_path_detection);
                         FileOpened = ailia_text_classificator.OpenFile(asset_path + "/" + model_path_classification, asset_path + "/" + weight_path_classification);
                         FileOpened = ailia_text_recognizer.OpenFile(asset_path + "/" + model_path_recognition, asset_path + "/" + weight_path_recognition);
@@ -170,10 +219,11 @@ namespace ailiaSDK
                     Debug.Log("Others ailia models are working in progress.");
                     break;
             }
+        }
 
-
-            //テキストファイルの読み込み
-            txt_file = File.ReadAllLines(dict_path);
+        private void LoadDictionary(string asset_path, string dict_path){
+            //辞書ファイルの読み込み
+            txt_file = File.ReadAllLines(asset_path + "/" + dict_path);
             string[] tmp = new string[txt_file.Length + 1]; //先頭に'blank'を追加
             tmp[0] = "blank";
             for (int i = 0; i < txt_file.Length; i++)
@@ -182,7 +232,6 @@ namespace ailiaSDK
             }
             txt_file = tmp;
         }
-
 
         private void DestroyAiliaDetector()
         {
@@ -247,7 +296,7 @@ namespace ailiaSDK
         
 
             //Draw result
-            if (ailiaModelType == TextRecognizerModels.PaddleOCR)
+            if (ailiaModelType == TextRecognizerModels.PaddleOCRV1 || ailiaModelType == TextRecognizerModels.PaddleOCRV3)
             {
                 float ratio = tex_height/(float)tex_width;
                 raw_image.rectTransform.sizeDelta = new Vector2(UIImageWidth, UIImageHeight * ratio);
@@ -292,7 +341,7 @@ namespace ailiaSDK
                         fy = (int)(fy * ratio + (UIImageHeight * (1 - ratio))/2.0f + 8);
 
                         DrawText(Color.white, result_recognitions[i].text, fx, fy, tex_width, tex_height, scale: ratio, text_color: Color.black);
-                        Debug.Log(result_recognitions[i].text);
+                        //Debug.Log(result_recognitions[i].text);
                     }
                 }
             }
