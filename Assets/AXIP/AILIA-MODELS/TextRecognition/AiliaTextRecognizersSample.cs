@@ -225,12 +225,13 @@ namespace ailiaSDK
         private void LoadDictionary(string asset_path, string dict_path){
             //辞書ファイルの読み込み
             txt_file = File.ReadAllLines(asset_path + "/" + dict_path);
-            string[] tmp = new string[txt_file.Length + 1]; //先頭に'blank'を追加
+            string[] tmp = new string[txt_file.Length + 1 + 1]; //先頭に'blank'、末尾にspaceを追加
             tmp[0] = "blank";
             for (int i = 0; i < txt_file.Length; i++)
             {
                 tmp[i + 1] = txt_file[i];
             }
+            tmp[tmp.Length - 1] = " "; //use_space = True
             txt_file = tmp;
         }
 
