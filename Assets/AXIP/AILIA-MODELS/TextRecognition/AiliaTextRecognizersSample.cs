@@ -329,7 +329,7 @@ namespace ailiaSDK
                         int fy = (int)(result_recognitions[i].box[0].y);
                         int fw = (int)((result_recognitions[i].box[3].x - result_recognitions[i].box[0].x));
                         int fh = (int)((result_recognitions[i].box[1].y - result_recognitions[i].box[0].y));
-                        fy = (int)(fy * ratio + (UIImageHeight * (1 - ratio))/2.0f + 8);
+                        fy = (int)(fy * ratio + (tex_height * (1 - ratio) / 2.0f));
                         fh = (int)(fh * ratio);
 
                         DrawRect2D(Color.blue, fx, fy, fw, fh, tex_width, tex_height);
@@ -342,7 +342,7 @@ namespace ailiaSDK
                         
                         int fx = (int)(result_recognitions[i].box[0].x);
                         int fy = (int)(result_recognitions[i].box[0].y);
-                        fy = (int)(fy * ratio + (UIImageHeight * (1 - ratio))/2.0f + 8);
+                        fy = (int)(fy * ratio + (tex_height * (1 - ratio)) / 2.0f);
 
                         DrawText(Color.white, result_recognitions[i].text, fx, fy, tex_width, tex_height, scale: ratio, text_color: Color.black);
                         //Debug.Log(result_recognitions[i].text);

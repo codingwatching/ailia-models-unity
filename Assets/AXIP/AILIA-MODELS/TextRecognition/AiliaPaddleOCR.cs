@@ -619,13 +619,15 @@ namespace ailiaSDK
 
 						box = new List<Vector2>(); //初期化
 
-						int buffer = 20 / IMAGE_SCALE;
+						int poly_area = (x_max - x_min) * (y_max - y_min);
+						int poly_length = (x_max - x_min) * 2 + (y_max - y_min) * 2;
+						float unclip_ratio = 1.5f;
+						int buffer = (int)(poly_area * unclip_ratio / poly_length); //unclipでマージンを付与する
+
 						box.Add(new Vector2(x_min - buffer, y_min - buffer));
 						box.Add(new Vector2(x_min - buffer, y_max + buffer));
 						box.Add(new Vector2(x_max + buffer, y_max + buffer));
 						box.Add(new Vector2(x_max + buffer, y_min - buffer));
-
-
 
 						boxes.Add(box);
 
