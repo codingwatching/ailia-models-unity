@@ -173,6 +173,7 @@ namespace ailiaSDK
 
                     StartCoroutine(ailia_download.DownloadWithProgressFromURL(urlList, () =>
                     {
+                        LoadDictionary(asset_path, dict_path);
                         FileOpened = ailia_text_detector.OpenFile(asset_path + "/" + model_path_detection, asset_path + "/" + weight_path_detection);
                         FileOpened = ailia_text_classificator.OpenFile(asset_path + "/" + model_path_classification, asset_path + "/" + weight_path_classification);
                         FileOpened = ailia_text_recognizer.OpenFile(asset_path + "/" + model_path_recognition, asset_path + "/" + weight_path_recognition);
