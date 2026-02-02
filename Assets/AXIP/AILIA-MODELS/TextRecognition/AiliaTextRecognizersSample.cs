@@ -59,6 +59,7 @@ namespace ailiaSDK
         public int camera_id = 0;
         public bool debug = false;
         public Texture2D test_image = null;
+        private bool processed = false;
 
         //Result
         public Text label_text = null;
@@ -245,7 +246,7 @@ namespace ailiaSDK
 
         void Start()
         {
-			AiliaLicense.CheckAndDownloadLicense();
+            AiliaLicense.CheckAndDownloadLicense();
             SetUIProperties();
             CreateAiliaTextRecognizer();
             ailia_camera.CreateCamera(camera_id, false);
@@ -262,6 +263,10 @@ namespace ailiaSDK
                 return;
             }
             if (!FileOpened)
+            {
+                return;
+            }
+            if (processed && !video_mode)
             {
                 return;
             }
@@ -284,13 +289,6 @@ namespace ailiaSDK
             int tex_width = original_width;
             int tex_height = original_height;
 
-            //int tex_width = paddle_ocr.PADDLEOCR_DETECTOR_INPUT_WIDTH_SIZE; //1536;
-            //int tex_height = paddle_ocr.PADDLEOCR_DETECTOR_INPUT_HEIGHT_SIZE; //839;
-
-            //if(camera.Length != tex_width * tex_height){
-            //    camera = ResizeColorArray(camera, original_width, original_height, tex_width, tex_height);
-            //}
-            
             //Predict
             long start_time = DateTime.UtcNow.Ticks / TimeSpan.TicksPerMillisecond;
             List<AiliaPaddleOCR.TextInfo> result_detections = paddle_ocr.Detection(ailia_text_detector, camera, tex_width, tex_height);
@@ -352,43 +350,11 @@ namespace ailiaSDK
             }
 
             if (label_text != null)
-			{
-				label_text.text = recognition_time + "ms\n" + ailia_text_recognizer.EnvironmentName();
-			}
-        }
+            {
+                label_text.text = recognition_time + "ms\n" + ailia_text_recognizer.EnvironmentName();
+            }
 
-
-
-        private Color32[] ResizeColorArray(Color32[] originalPixels, int originalWidth, int originalHeight, int newWidth, int newHeight)
-		{
-			Texture2D newTexture = new Texture2D(newWidth, newHeight, TextureFormat.RGBA32, false);
-
-			Texture2D originalTexture = new Texture2D(originalWidth, originalHeight, TextureFormat.RGBA32, false);
-			originalTexture.SetPixels32(originalPixels);
-			originalTexture.Apply();
-
-            newTexture = GetResized(originalTexture, newWidth, newHeight);
-
-			Color32[] resizedPixels = newTexture.GetPixels32();
-
-			return resizedPixels;
-		}
-
-
-        private Texture2D GetResized(Texture2D texture, int width, int height)
-        {
-            var rt = RenderTexture.GetTemporary(width, height);
-            Graphics.Blit(texture, rt);
-
-            var preRT = RenderTexture.active;
-            RenderTexture.active = rt;
-            var ret = new Texture2D(width, height);
-            ret.ReadPixels(new Rect(0, 0, width, height), 0, 0);
-            ret.Apply();
-            RenderTexture.active = preRT;
-
-            RenderTexture.ReleaseTemporary(rt);
-            return ret;
+            processed = true;
         }
 
 
