@@ -152,6 +152,7 @@ The collection of pre-trained, state-of-the-art models for Unity.
 | Name | Detail | Exported From | Supported Ailia Version | Blog |
 |:-----------|------------:|:------------:|:------------:|:------------:|
 | [paddleocr](/Assets/AXIP/AILIA-MODELS/TextRecognition/) | [PaddleOCR : Awesome multilingual OCR toolkits based on PaddlePaddle](https://github.com/PaddlePaddle/PaddleOCR) | Pytorch | 1.2.6 and later | [EN](https://medium.com/axinc-ai/paddleocr-the-latest-lightweight-ocr-system-a13171d7ea3e) [JP](https://medium.com/axinc/paddleocr-%E6%9C%80%E6%96%B0%E3%81%AE%E8%BB%BD%E9%87%8Focr%E3%82%B7%E3%82%B9%E3%83%86%E3%83%A0-8744205f3703) |
+| [paddleocr_v3](/Assets/AXIP/AILIA-MODELS/TextRecognition) | [PaddleOCR : Awesome multilingual OCR toolkits based on PaddlePaddle](https://github.com/PaddlePaddle/PaddleOCR) | Pytorch | 1.2.17 and later | [JP](https://medium.com/axinc/paddleocr-v3-%E6%97%A5%E6%9C%AC%E8%AA%9E%E3%81%8C%E9%AB%98%E7%B2%BE%E5%BA%A6%E5%8C%96%E3%81%97%E3%81%9F%E6%9C%80%E6%96%B0%E3%81%AEocr%E3%83%A2%E3%83%87%E3%83%AB-7dfa93a3dfcd) |
 
 ## Text to Speech
 
