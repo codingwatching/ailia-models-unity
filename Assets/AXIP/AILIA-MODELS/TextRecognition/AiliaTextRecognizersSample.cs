@@ -280,12 +280,15 @@ namespace ailiaSDK
                 original_height = test_image.height;
             }
 
-            int tex_width = paddle_ocr.PADDLEOCR_DETECTOR_INPUT_WIDTH_SIZE; //1536;
-            int tex_height = paddle_ocr.PADDLEOCR_DETECTOR_INPUT_HEIGHT_SIZE; //839;
+            int tex_width = original_width;
+            int tex_height = original_height;
 
-            if(camera.Length != tex_width * tex_height){
-                camera = ResizeColorArray(camera, original_width, original_height, tex_width, tex_height);
-            }
+            //int tex_width = paddle_ocr.PADDLEOCR_DETECTOR_INPUT_WIDTH_SIZE; //1536;
+            //int tex_height = paddle_ocr.PADDLEOCR_DETECTOR_INPUT_HEIGHT_SIZE; //839;
+
+            //if(camera.Length != tex_width * tex_height){
+            //    camera = ResizeColorArray(camera, original_width, original_height, tex_width, tex_height);
+            //}
             
             //Predict
             long start_time = DateTime.UtcNow.Ticks / TimeSpan.TicksPerMillisecond;
