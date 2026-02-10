@@ -9,8 +9,8 @@ This folder contains real‑time image classification using ailia SDK. The scene
   - Source: `./AiliaImageClassificationSample.cs`
   - Script behavior: Loads `googlenet.onnx`, sets RGB/CHW/FP32 input format, and queries top‑k classes per frame.
 
-- ResNet‑50 (INT8 opt variant selectable)
-  - Purpose: ImageNet‑class classification with quantized or FP models.
+- ResNet‑50
+  - Purpose: ImageNet‑class classification.
   - Source: `./AiliaImageClassificationSample.cs`
   - Script behavior: Loads `resnet50*.onnx` according to the `resnet50model` field (e.g., `resnet50.opt.onnx`), sets RGB/CHW/INT8 range, and returns ranked logits.
 
