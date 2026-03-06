@@ -155,9 +155,11 @@ namespace ailiaSDK
 				return;
 			}
 
-			string deltaText = llm.GetDeltaText();
-			generate_text = generate_text + deltaText;
-			label_text.text = generate_text;
+			if (done == false){
+				string deltaText = llm.GetDeltaText();
+				generate_text = generate_text + deltaText;
+				label_text.text = generate_text;
+			}
 
 			if (done){
 				AiliaLLMChatMessage message = new AiliaLLMChatMessage();
