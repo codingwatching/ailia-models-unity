@@ -22,17 +22,14 @@ namespace ailiaSDK
 
 		public const int PADDLEOCR_DETECTOR_INPUT_BATCH_SIZE = 1;
 		public const int PADDLEOCR_DETECTOR_INPUT_CHANNEL_COUNT = 3;
-		public int PADDLEOCR_DETECTOR_INPUT_HEIGHT_SIZE = 832;
-		public int PADDLEOCR_DETECTOR_INPUT_WIDTH_SIZE = 1536;
+		public int PADDLEOCR_DETECTOR_LIMIT_SIZE = 1920;
 
 		public const int PADDLEOCR_DETECTOR_OUTPUT_BATCH_SIZE = 1;
 		public const int PADDLEOCR_DETECTOR_OUTPUT_CHANNEL_COUNT = 1;
-		public const int PADDLEOCR_DETECTOR_OUTPUT_HEIGHT_SIZE = 832;
-		public const int PADDLEOCR_DETECTOR_OUTPUT_WIDTH_SIZE = 1536;
 
 		public const float DETECTION_THRESH = 0.3f;
 
-		public const int LIMITED_MAX_WIDTH = 1280;
+		public int LIMITED_MAX_WIDTH = 1280;
     	public const int LIMITED_MIN_WIDTH = 16;
 
 		public const int PADDLEOCR_CLASSIFIER_INPUT_BATCH_SIZE = 1;
@@ -41,13 +38,19 @@ namespace ailiaSDK
 		public const int PADDLEOCR_CLASSIFIER_INPUT_WIDTH_SIZE = 192;
 		
 		public const int PADDLEOCR_RECOGNITION_CHANNEL_COUNT = 3;
-		public const int PADDLEOCR_RECOGNITION_IMAGE_HEIGHT = 32;
+		public int PADDLEOCR_RECOGNITION_IMAGE_HEIGHT = 32;
 		public const int PADDLEOCR_RECOGNITION_IMAGE_WIDTH = 320;
 
-		public const int CAMERA_HEIGHT = 1080;
-		public const int CAMERA_WIDTH = 1920;
-
 		public const int IMAGE_SCALE = 1; //処理を軽くするために画像のサイズを調整
+
+
+		public void SetVersion(int version)
+		{
+			if (version == 3) { // デフォルトのパラメータはv1なので、v3相当に更新
+				LIMITED_MAX_WIDTH = 3200;
+				PADDLEOCR_RECOGNITION_IMAGE_HEIGHT = 48;
+			}
+		}
 
 
 		public struct TextInfo
@@ -59,45 +62,75 @@ namespace ailiaSDK
 		}
 
 
+		private Color32 Bilinear(Color32[] img, int w, int h, float fx, float fy)
+		{
+			int x2 = (int)fx;
+			int y2 = (int)fy;
+			float xa = 1.0f - (fx - x2);
+			float xb = 1.0f - xa;
+			float ya = 1.0f - (fy - y2);
+			float yb = 1.0f - ya;
+			if (x2 >= w || y2 >= h || x2 < 0 || y2 < 0){
+				return new Color32(0, 0, 0, 255);
+			}
+			int y3 = h - 1 - y2; // B2T to T2B
+			Color32 c1 = img[y3 * w + x2];
+			Color32 c2 = (x2+1 < w) ? img[y3 * w + x2 + 1] : c1;
+			Color32 c3 = (y2+1 < h) ? img[(y3 - 1) * w + x2] : c1;
+			Color32 c4 = (x2+1 < w && y2+1 < h) ? img[(y3 - 1) * w + x2 + 1] : c1;
+			byte r = (byte)(c1.r * xa * ya + c2.r * xb * ya + c3.r * xa * yb + c4.r * xb * yb);
+			byte g = (byte)(c1.g * xa * ya + c2.g * xb * ya + c3.g * xa * yb + c4.g * xb * yb);
+			byte b = (byte)(c1.b * xa * ya + c2.b * xb * ya + c3.b * xa * yb + c4.b * xb * yb);
+			return new Color32(r, g, b, 255);
+		}
+
+
 		public List<TextInfo> Detection(AiliaModel ailia_model, Color32[] camera, int tex_width, int tex_height)
 		{
 			bool status;
 
 			//リサイズ
-			float[] data = new float[PADDLEOCR_DETECTOR_INPUT_BATCH_SIZE * PADDLEOCR_DETECTOR_INPUT_CHANNEL_COUNT * PADDLEOCR_DETECTOR_INPUT_HEIGHT_SIZE * PADDLEOCR_DETECTOR_INPUT_WIDTH_SIZE];
-			int w = PADDLEOCR_DETECTOR_INPUT_WIDTH_SIZE;
-			int h = PADDLEOCR_DETECTOR_INPUT_HEIGHT_SIZE;
+			int w = tex_width;
+			int h = tex_height;
+
+			if (w > PADDLEOCR_DETECTOR_LIMIT_SIZE || h > PADDLEOCR_DETECTOR_LIMIT_SIZE) {
+				float ratio = Mathf.Min(PADDLEOCR_DETECTOR_LIMIT_SIZE / w, PADDLEOCR_DETECTOR_LIMIT_SIZE / h);
+				w = (int)(w * ratio);
+				h = (int)(h * ratio);
+			}
 
 			float scale = 1.0f * tex_width / w;
+
+			w = (w + 31) / 32 * 32;
+			h = (h + 31) / 32 * 32;
+
+			float[] data = new float[PADDLEOCR_DETECTOR_INPUT_BATCH_SIZE * PADDLEOCR_DETECTOR_INPUT_CHANNEL_COUNT * h * w];
+
 			for (int y = 0; y < h; y++)
 			{
 				for (int x = 0; x < w; x++)
 				{
-					int y2 = (int)(1.0 * y * scale);
-					int x2 = (int)(1.0 * x * scale);
-					if (x2 < 0 || y2 < 0 || x2 >= tex_width || y2 >= tex_height)
-					{
-						data[(y * w + x) + 0 * w * h] = 0;
-						data[(y * w + x) + 1 * w * h] = 0;
-						data[(y * w + x) + 2 * w * h] = 0;
-						continue;
-					}
-					data[(y * w + x) + 0 * w * h] = ((float)((camera[(tex_height - 1 - y2) * tex_width + x2].r) / 255.0f - 0.485f) / 0.229f);
-					data[(y * w + x) + 1 * w * h] = ((float)((camera[(tex_height - 1 - y2) * tex_width + x2].g) / 255.0f - 0.456f) / 0.224f);
-					data[(y * w + x) + 2 * w * h] = ((float)((camera[(tex_height - 1 - y2) * tex_width + x2].b) / 255.0f - 0.406f) / 0.225f);
+					float fx = x * scale;
+					float fy = y * scale;
+
+					Color32 v = Bilinear(camera, tex_width, tex_height, fx, fy);
+
+					data[(y * w + x) + 0 * w * h] = ((float)((v.r) / 255.0f - 0.485f) / 0.229f);
+					data[(y * w + x) + 1 * w * h] = ((float)((v.g) / 255.0f - 0.456f) / 0.224f);
+					data[(y * w + x) + 2 * w * h] = ((float)((v.b) / 255.0f - 0.406f) / 0.225f);
 				}
 			}
 
 
 			uint[] input_blobs = ailia_model.GetInputBlobList();
-			int inputBlobIndex = ailia_model.FindBlobIndexByName("input");
+			uint inputBlobIndex = input_blobs[0];
 
 			//SetInputBlobShape
 			status = ailia_model.SetInputBlobShape(
 				new Ailia.AILIAShape
 				{
-					x = (uint)PADDLEOCR_DETECTOR_INPUT_WIDTH_SIZE,
-					y = (uint)PADDLEOCR_DETECTOR_INPUT_HEIGHT_SIZE,
+					x = (uint)w,
+					y = (uint)h,
 					z = (uint)PADDLEOCR_DETECTOR_INPUT_CHANNEL_COUNT,
 					w = PADDLEOCR_DETECTOR_INPUT_BATCH_SIZE,
 					dim = 4
@@ -127,8 +160,9 @@ namespace ailiaSDK
 
 
 			//Get(Output)BlobData
-			float[] box_data = new float[PADDLEOCR_DETECTOR_OUTPUT_BATCH_SIZE * PADDLEOCR_DETECTOR_OUTPUT_CHANNEL_COUNT * PADDLEOCR_DETECTOR_OUTPUT_HEIGHT_SIZE * PADDLEOCR_DETECTOR_OUTPUT_WIDTH_SIZE];
-			int outputBlobIndex = ailia_model.FindBlobIndexByName("output");
+			float[] box_data = new float[PADDLEOCR_DETECTOR_OUTPUT_BATCH_SIZE * PADDLEOCR_DETECTOR_OUTPUT_CHANNEL_COUNT * h * w];
+			uint[] output_blobs = ailia_model.GetOutputBlobList();
+			uint outputBlobIndex = output_blobs[0];
 			status = ailia_model.GetBlobData(box_data, outputBlobIndex);
 			if (status == false)
 			{
@@ -136,9 +170,6 @@ namespace ailiaSDK
 				Debug.LogError(ailia_model.GetErrorDetail());
 			}
 
-
-
-			uint[] output_blobs = ailia_model.GetOutputBlobList();
 			//Debug.Log(string.Join(",", output_blobs)); //152
 
 			Ailia.AILIAShape box_shape = ailia_model.GetBlobShape((int)output_blobs[0]);
@@ -204,7 +235,7 @@ namespace ailiaSDK
 
 					uint[] input_blobs = ailia_model.GetInputBlobList();
 					//Debug.Log(string.Join(",", input_blobs)); //0
-					int inputBlobIndex = ailia_model.FindBlobIndexByName("input");
+					uint inputBlobIndex = input_blobs[0];
 					// Debug.Log(inputBlobIndex); //0			
 					status = ailia_model.SetInputBlobShape(
 						new Ailia.AILIAShape
@@ -242,7 +273,7 @@ namespace ailiaSDK
 					int OUTPUT_CHANNEL_COUNT = (int)box_shape.x;
 					int OUTPUT_BATCH_SIZE = (int)box_shape.y;
 					float[] out_data = new float[OUTPUT_CHANNEL_COUNT * OUTPUT_BATCH_SIZE];
-					int outputBlobIndex = ailia_model.FindBlobIndexByName("output");
+					uint outputBlobIndex = output_blobs[0];
 					status = ailia_model.GetBlobData(out_data, outputBlobIndex);
 					if (status == false)
 					{
@@ -306,7 +337,7 @@ namespace ailiaSDK
 				
 					int INPUT_BATCH_SIZE = 1;
 					int INPUT_CHANNEL_COUNT = 3;
-					int INPUT_HEIGHT_SIZE = 32;
+					int INPUT_HEIGHT_SIZE = PADDLEOCR_RECOGNITION_IMAGE_HEIGHT;
 					int INPUT_WIDTH_SIZE = ROI_list[r].GetLength(1);
 
 
@@ -328,7 +359,7 @@ namespace ailiaSDK
 
 					uint[] input_blobs = ailia_model.GetInputBlobList();
 					//Debug.Log(string.Join(",", input_blobs)); //0
-					int inputBlobIndex = ailia_model.FindBlobIndexByName("input");
+					uint inputBlobIndex = input_blobs[0];
 					// Debug.Log(inputBlobIndex); //0			
 					status = ailia_model.SetInputBlobShape(
 						new Ailia.AILIAShape
@@ -370,7 +401,7 @@ namespace ailiaSDK
 					int OUTPUT_CHANNEL_COUNT = (int)box_shape.z;
 					int OUTPUT_BATCH_SIZE = (int)box_shape.w;
 					float[] out_data = new float[OUTPUT_BATCH_SIZE * OUTPUT_CHANNEL_COUNT * OUTPUT_HEIGHT_SIZE * OUTPUT_WIDTH_SIZE];
-					int outputBlobIndex = ailia_model.FindBlobIndexByName("output");
+					uint outputBlobIndex = output_blobs[0];
 					status = ailia_model.GetBlobData(out_data, outputBlobIndex);
 					if (status == false)
 					{
@@ -422,15 +453,15 @@ namespace ailiaSDK
 		{
 			List<TextInfo> results = new List<TextInfo>();
 
-			float[,] BoxData = new float[PADDLEOCR_DETECTOR_OUTPUT_HEIGHT_SIZE, PADDLEOCR_DETECTOR_OUTPUT_WIDTH_SIZE]; //box_dataを二次元に変換
-			int[,] Segmentation = new int[PADDLEOCR_DETECTOR_OUTPUT_HEIGHT_SIZE, PADDLEOCR_DETECTOR_OUTPUT_WIDTH_SIZE]; //BitmapのうちThreshより大きい値の部分だけ1にする
+			float[,] BoxData = new float[input_h, input_w]; //box_dataを二次元に変換
+			int[,] Segmentation = new int[input_h, input_w]; //BitmapのうちThreshより大きい値の部分だけ1にする
 
 			
-			for (int i = 0; i < PADDLEOCR_DETECTOR_OUTPUT_HEIGHT_SIZE; i++)
+			for (int i = 0; i < input_h; i++)
 			{
-				for (int j = 0; j < PADDLEOCR_DETECTOR_OUTPUT_WIDTH_SIZE; j++)
+				for (int j = 0; j < input_w; j++)
 				{
-					BoxData[i, j] = box_data[i * PADDLEOCR_DETECTOR_OUTPUT_WIDTH_SIZE + j];
+					BoxData[i, j] = box_data[i * input_w + j];
 
 					if (BoxData[i, j] > DETECTION_THRESH)
 					{
@@ -443,10 +474,10 @@ namespace ailiaSDK
 				}
 			}
 
-			int[,] small_Segmentation = new int[PADDLEOCR_DETECTOR_OUTPUT_HEIGHT_SIZE / IMAGE_SCALE, PADDLEOCR_DETECTOR_OUTPUT_WIDTH_SIZE / IMAGE_SCALE];
-			for (int i = 0; i < PADDLEOCR_DETECTOR_OUTPUT_HEIGHT_SIZE / IMAGE_SCALE; i++)
+			int[,] small_Segmentation = new int[input_h / IMAGE_SCALE, input_w / IMAGE_SCALE];
+			for (int i = 0; i < input_h / IMAGE_SCALE; i++)
 			{
-				for (int j = 0; j < PADDLEOCR_DETECTOR_OUTPUT_WIDTH_SIZE / IMAGE_SCALE; j++)
+				for (int j = 0; j < input_w / IMAGE_SCALE; j++)
 				{
 					small_Segmentation[i, j] = Segmentation[i * IMAGE_SCALE, j * IMAGE_SCALE];
 				}
@@ -588,13 +619,15 @@ namespace ailiaSDK
 
 						box = new List<Vector2>(); //初期化
 
-						int buffer = 20 / IMAGE_SCALE;
+						int poly_area = (x_max - x_min) * (y_max - y_min);
+						int poly_length = (x_max - x_min) * 2 + (y_max - y_min) * 2;
+						float unclip_ratio = 1.5f;
+						int buffer = (int)(poly_area * unclip_ratio / poly_length); //unclipでマージンを付与する
+
 						box.Add(new Vector2(x_min - buffer, y_min - buffer));
 						box.Add(new Vector2(x_min - buffer, y_max + buffer));
 						box.Add(new Vector2(x_max + buffer, y_max + buffer));
 						box.Add(new Vector2(x_max + buffer, y_min - buffer));
-
-
 
 						boxes.Add(box);
 
@@ -671,7 +704,7 @@ namespace ailiaSDK
 				for (int x = 0; x < width; x++)
 				{
 					int originalX = (int)(bottomLeft.x) + x;
-					int originalY = PADDLEOCR_DETECTOR_INPUT_HEIGHT_SIZE - ((int)(bottomLeft.y) + y);
+					int originalY = binary_camera.GetLength(2) - ((int)(bottomLeft.y) + y);
 
 					// 範囲外を処理
 					if(originalX < 0){
@@ -742,14 +775,18 @@ namespace ailiaSDK
 		//Recognition用のリサイズ
 		private float[,,] ResizeNormImgForRecognition(float[,,] img)
 		{
-			int imgC = PADDLEOCR_RECOGNITION_CHANNEL_COUNT;
-			int imgH = PADDLEOCR_RECOGNITION_IMAGE_HEIGHT;
-			int imgW = PADDLEOCR_RECOGNITION_IMAGE_WIDTH;
-			imgW = Math.Max(Math.Min(imgW, LIMITED_MAX_WIDTH), LIMITED_MIN_WIDTH);
-
 			int w = img.GetLength(1);
 			int h = img.GetLength(2);
 			float ratio = w / (float)h;
+
+			int imgC = PADDLEOCR_RECOGNITION_CHANNEL_COUNT;
+			int imgH = PADDLEOCR_RECOGNITION_IMAGE_HEIGHT;
+			int imgW = PADDLEOCR_RECOGNITION_IMAGE_WIDTH;
+
+			float max_ratio = ratio; // Python版では全テキストのratioの最大を使っているが、C#では局所的なratioを使用する
+			imgW = (int)(imgH * max_ratio);
+			imgW = Math.Max(Math.Min(imgW, LIMITED_MAX_WIDTH), LIMITED_MIN_WIDTH);
+
 			int ratio_imgH = (int)Math.Ceiling(imgH * ratio);
 			ratio_imgH = Math.Max(ratio_imgH, LIMITED_MIN_WIDTH);
 			int resized_w = 0;
@@ -771,14 +808,12 @@ namespace ailiaSDK
 					int sourceX = (int)(x * widthRatio);
 					int sourceY = (int)(y * heightRatio);
 
-					if (sourceX >= w)
+					if (sourceX >= w || sourceY >= h)
 					{
-						sourceX = w - 1;
-					}
-
-					if (sourceY >= h)
-					{
-						sourceY = h - 1;
+						for (int c = 0; c < imgC; c++){
+							resizedImg[c, x, y] = 127.5f; // 0 fillのためstdを処理した後に0になる値を入れる
+						}
+						continue;
 					}
 
 					for (int c = 0; c < imgC; c++){
