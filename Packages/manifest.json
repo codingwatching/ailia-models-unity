@@ -7,7 +7,7 @@
     "ai.ailia.ailia_tflite": "https://github.com/ailia-ai/ailia-tflite-unity.git",
     "ai.ailia.ailia_tokenizer": "https://github.com/ailia-ai/ailia-tokenizer-unity.git",
     "ai.ailia.ailia_tracker": "https://github.com/ailia-ai/ailia-tracker-unity.git",
-    "ai.ailia.ailia_voice": "https://github.com/ailia-ai/ailia-voice-unity.git",
+    "ai.ailia.ailia_voice": "https://github.com/ailia-ai/ailia-voice-unity.git#release_1_50",
     "com.unity.2d.sprite": "1.0.0",
     "com.unity.2d.tilemap": "1.0.0",
     "com.unity.ide.rider": "1.2.1",
