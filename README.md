@@ -163,6 +163,7 @@ The collection of pre-trained, state-of-the-art models for Unity.
 | [gpt-sovits-v2](/Assets/AXIP/AILIA-MODELS/TextToSpeech/) | [GPT-SoVITS v2](https://github.com/RVC-Boss/GPT-SoVITS) | Pytorch | 1.5.0 and later | |
 | [gpt-sovits-v3](/Assets/AXIP/AILIA-MODELS/TextToSpeech/) | [GPT-SoVITS v3](https://github.com/RVC-Boss/GPT-SoVITS) | Pytorch | 1.5.0 and later | |
 | [gpt-sovits-v2-pro](/Assets/AXIP/AILIA-MODELS/TextToSpeech/) | [GPT-SoVITS v2 Pro](https://github.com/RVC-Boss/GPT-SoVITS) | Pytorch | 1.5.0 and later | |
+| [gpt-sovits-v2-pro-distill](/Assets/AXIP/AILIA-MODELS/TextToSpeech/) | [GPT-SoVITS v2 Pro Distill](https://github.com/RVC-Boss/GPT-SoVITS) | Pytorch | 1.5.0 and later | |
 
 ## Face detection
 

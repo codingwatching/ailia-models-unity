@@ -29,9 +29,14 @@ This folder provides neural TTS pipelines. The scene is `TextToSpeech/TextToSpee
   - Source: `./AiliaVoiceSample.cs`
   - Script behavior: Opens T2S encoder/FS decoder/decoder + cnhubert + VITS + SV; uses G2P for JA/EN/ZH. Optional Chinese BERT support.
 
+- GPT‑SoVITS v2 Pro Distill (Japanese)
+  - Purpose: Distilled (lightweight) version of v2 Pro for faster inference.
+  - Source: `./AiliaVoiceSample.cs`
+  - Script behavior: Uses distilled T2S encoder/FS decoder/decoder with shared v2 Pro cnhubert/VITS/SV models; uses G2P for JA.
+
 ## Model Files and Paths
 
-- Models download into `Application.temporaryCachePath` under `tacotron2`, `gpt-sovits`, `gpt-sovits-v2`, `gpt-sovits-v3`, `gpt-sovits-v2-pro`, `g2p_en`, `g2p_cn`, and `g2pw`.
+- Models download into `Application.temporaryCachePath` under `tacotron2`, `gpt-sovits`, `gpt-sovits-v2`, `gpt-sovits-v3`, `gpt-sovits-v2-pro`, `gpt-sovits-v2-pro-distill`, `g2p_en`, `g2p_cn`, and `g2pw`.
 
 ## Reusing in Your Own Code
 
