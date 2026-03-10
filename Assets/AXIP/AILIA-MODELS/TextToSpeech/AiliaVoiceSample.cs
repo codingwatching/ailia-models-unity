@@ -47,6 +47,7 @@ public class AiliaVoiceSample : MonoBehaviour
 	private AiliaVoiceModel voice = new AiliaVoiceModel();
 	private string before_ref_clip_name = "";
 	private bool model_downloading = false;
+	private bool use_user_dict = false;
     private Task t = null;
 
 	// model download
@@ -217,6 +218,7 @@ public class AiliaVoiceSample : MonoBehaviour
 					Debug.Log("SetUserDictionary failed");
 					return;
 				}
+				use_user_dict = true;
 				status = voice.OpenDictionary(path, AiliaVoice.AILIA_VOICE_DICTIONARY_TYPE_OPEN_JTALK);
 				if (status == false){
 					Debug.Log("OpenDictionary failed");
@@ -301,7 +303,7 @@ public class AiliaVoiceSample : MonoBehaviour
 			}
 		}
 		if (IsGPTSoVITS()){
-			if (IsJapanese()){
+			if (use_user_dict){
 				text = text.ToLower();
 			}
 			text = voice.G2P(text, GetG2PType());
