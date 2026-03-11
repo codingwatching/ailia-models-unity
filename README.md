@@ -88,11 +88,20 @@ The collection of pre-trained, state-of-the-art models for Unity.
 
 ## Large Language model
 
-| Name | Detail | Exported From | Supported Ailia Version | Blog |
+| Name | Detail | Exported From | Supported Ailia LLM Version | Blog |
 |:-----------|------------:|:------------:|:------------:|:------------:|
-| [gemma2](/Assets/AXIP/AILIA-MODELS/LargeLanguageModel/) | [gemma-2-2b](https://huggingface.co/google/gemma-2-2b) | Llama.cpp | | |
-| [gemma3](/Assets/AXIP/AILIA-MODELS/LargeLanguageModel/) | [gemma-3-4b](https://huggingface.co/google/gemma-3-4b-it) | Llama.cpp | | |
-| [llama3.2](/Assets/AXIP/AILIA-MODELS/LargeLanguageModel/) | [llama3.2-3b](https://huggingface.co/meta-llama/Llama-3.2-3B) | Llama.cpp | | |
+| [gemma2](/Assets/AXIP/AILIA-MODELS/LargeLanguageModel/) | [gemma-2-2b](https://huggingface.co/google/gemma-2-2b) | Llama.cpp | 1.3.0 | |
+| [gemma3-1b](/Assets/AXIP/AILIA-MODELS/LargeLanguageModel/) | [gemma-3-1b](https://huggingface.co/google/gemma-3-1b-it) | Llama.cpp | 1.3.0 | |
+| [gemma3](/Assets/AXIP/AILIA-MODELS/LargeLanguageModel/) | [gemma-3-4b](https://huggingface.co/google/gemma-3-4b-it) | Llama.cpp | 1.3.0 | |
+| [gemma3n-E2B](/Assets/AXIP/AILIA-MODELS/LargeLanguageModel/) | [gemma-3n-E2B](https://huggingface.co/unsloth/gemma-3n-E2B-it-GGUF) | Llama.cpp | 1.4.0 | |
+| [gemma3n-E4B](/Assets/AXIP/AILIA-MODELS/LargeLanguageModel/) | [gemma-3n-E4B](https://huggingface.co/unsloth/gemma-3n-E2B-it-GGUF) | Llama.cpp | 1.4.0 | |
+| [llama3.2](/Assets/AXIP/AILIA-MODELS/LargeLanguageModel/) | [llama3.2-3b](https://huggingface.co/meta-llama/Llama-3.2-3B) | Llama.cpp | 1.3.0 | |
+
+## Vision Language model
+
+| Name | Detail | Exported From | Supported Ailia LLM Version | Blog |
+|:-----------|------------:|:------------:|:------------:|:------------:|
+| [gemma3](/Assets/AXIP/AILIA-MODELS/VisionLanguageModel/) | [gemma-3-4b](https://huggingface.co/google/gemma-3-4b-it) | Llama.cpp | 1.4.0 | |
 
 ## Object detection
 
