@@ -5,7 +5,10 @@ This folder demonstrates running quantized GGUF LLMs locally. The scene is `Larg
 ## Supported Models
 
 - Gemma 2 2B (IT, Q4_K_M)
+- Gemma 3 1B (IT, Q4_K_M)
 - Gemma 3 4B (IT, Q4_K_M)
+- Gemma 3n E2B (IT, Q4_K_M)
+- Gemma 3n E4B (IT, Q4_K_M)
 - Llama 3.2 3B Instruct (Q4_K_M)
 
 ## Script Behavior
