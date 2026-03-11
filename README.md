@@ -101,7 +101,7 @@ The collection of pre-trained, state-of-the-art models for Unity.
 
 | Name | Detail | Exported From | Supported Ailia LLM Version | Blog |
 |:-----------|------------:|:------------:|:------------:|:------------:|
-| [gemma3](/Assets/AXIP/AILIA-MODELS/VisionLanguageModel/) | [gemma-3-4b](https://huggingface.co/google/gemma-3-4b-it) | Llama.cpp | 1.3.0 | |
+| [gemma3](/Assets/AXIP/AILIA-MODELS/VisionLanguageModel/) | [gemma-3-4b](https://huggingface.co/google/gemma-3-4b-it) | Llama.cpp | 1.4.0 | |
 
 ## Object detection
 
