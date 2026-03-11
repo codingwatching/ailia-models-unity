@@ -19,6 +19,7 @@ namespace ailiaSDK {
 		public enum AiliaSpeechToTextModels
 		{
 			whisper_tiny,
+			whisper_base,
 			whisper_small,
 			whisper_medium,
 			whisper_turbo,
@@ -76,6 +77,7 @@ namespace ailiaSDK {
 			switch (modelType)
 			{
 				case AiliaSpeechToTextModels.whisper_tiny:
+				case AiliaSpeechToTextModels.whisper_base:
 				case AiliaSpeechToTextModels.whisper_small:
 				case AiliaSpeechToTextModels.whisper_medium:
 				case AiliaSpeechToTextModels.whisper_turbo:
@@ -100,6 +102,12 @@ namespace ailiaSDK {
 						api_model_type = AiliaSpeech.AILIA_SPEECH_MODEL_TYPE_WHISPER_MULTILINGUAL_TINY;
 						encoder_path = "encoder_tiny.opt3.onnx";
 						decoder_path = "decoder_tiny_fix_kv_cache.opt3.onnx";
+						remote_path = "whisper";
+					}
+					if (ailiaModelType == AiliaSpeechToTextModels.whisper_base){
+						api_model_type = AiliaSpeech.AILIA_SPEECH_MODEL_TYPE_WHISPER_MULTILINGUAL_BASE;
+						encoder_path = "encoder_base.opt3.onnx";
+						decoder_path = "decoder_base_fix_kv_cache.opt3.onnx";
 						remote_path = "whisper";
 					}
 					if (ailiaModelType == AiliaSpeechToTextModels.whisper_small){
