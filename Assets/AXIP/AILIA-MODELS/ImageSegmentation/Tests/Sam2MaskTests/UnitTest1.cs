@@ -750,49 +750,50 @@ public class SegmentAnything2MaskTest
     }
 
     // =======================================================
-    // 17. ResizeColor32 (nearest neighbor)
+    // 17. ResizeBilinearHWC (bilinear interpolation for preprocessing)
     // =======================================================
     [Test]
-    public void ResizeColor32_Upscale()
+    public void ResizeBilinearHWC_Upscale()
     {
-        Color32[] src = new Color32[]
-        {
-            new Color32(255, 0, 0, 255),
-            new Color32(0, 255, 0, 255),
-            new Color32(0, 0, 255, 255),
-            new Color32(255, 255, 0, 255),
-        };
+        // 2x2 float image -> 4x4
+        float[,,] src = new float[2, 2, 3];
+        src[0, 0, 0] = 1.0f; src[0, 0, 1] = 0.0f; src[0, 0, 2] = 0.0f; // red
+        src[0, 1, 0] = 0.0f; src[0, 1, 1] = 1.0f; src[0, 1, 2] = 0.0f; // green
+        src[1, 0, 0] = 0.0f; src[1, 0, 1] = 0.0f; src[1, 0, 2] = 1.0f; // blue
+        src[1, 1, 0] = 1.0f; src[1, 1, 1] = 1.0f; src[1, 1, 2] = 0.0f; // yellow
 
-        Color32[] result = logic.ResizeColor32(src, 2, 2, 4, 4);
+        float[,,] result = logic.ResizeBilinearHWC(src, 2, 2, 4, 4);
 
-        Assert.That(result.Length, Is.EqualTo(16));
-        Assert.That(result[0].r, Is.EqualTo(255));
-        Assert.That(result[0].g, Is.EqualTo(0));
-        Assert.That(result[1].r, Is.EqualTo(255));
-        Assert.That(result[2].r, Is.EqualTo(0));
-        Assert.That(result[2].g, Is.EqualTo(255));
+        Assert.That(result.GetLength(0), Is.EqualTo(4));
+        Assert.That(result.GetLength(1), Is.EqualTo(4));
+        Assert.That(result.GetLength(2), Is.EqualTo(3));
+
+        // Corners should be exact
+        Assert.That(result[0, 0, 0], Is.EqualTo(1.0f).Within(Tolerance), "Top-left R");
+        Assert.That(result[0, 3, 1], Is.EqualTo(1.0f).Within(Tolerance), "Top-right G");
+        Assert.That(result[3, 0, 2], Is.EqualTo(1.0f).Within(Tolerance), "Bottom-left B");
+        Assert.That(result[3, 3, 0], Is.EqualTo(1.0f).Within(Tolerance), "Bottom-right R");
+
+        // Center should be blend of all 4
+        Assert.That(result[1, 1, 0], Is.GreaterThan(0.0f), "Center should have R > 0");
     }
 
     [Test]
-    public void ResizeColor32_SameSize()
+    public void ResizeBilinearHWC_SameSize()
     {
-        Color32[] src = new Color32[]
-        {
-            new Color32(10, 20, 30, 255),
-            new Color32(40, 50, 60, 255),
-            new Color32(70, 80, 90, 255),
-            new Color32(100, 110, 120, 255),
-        };
+        float[,,] src = new float[2, 2, 3];
+        src[0, 0, 0] = 0.1f; src[0, 0, 1] = 0.2f; src[0, 0, 2] = 0.3f;
+        src[0, 1, 0] = 0.4f; src[0, 1, 1] = 0.5f; src[0, 1, 2] = 0.6f;
+        src[1, 0, 0] = 0.7f; src[1, 0, 1] = 0.8f; src[1, 0, 2] = 0.9f;
+        src[1, 1, 0] = 1.0f; src[1, 1, 1] = 0.0f; src[1, 1, 2] = 0.5f;
 
-        Color32[] result = logic.ResizeColor32(src, 2, 2, 2, 2);
+        float[,,] result = logic.ResizeBilinearHWC(src, 2, 2, 2, 2);
 
-        Assert.That(result.Length, Is.EqualTo(4));
-        for (int i = 0; i < 4; i++)
-        {
-            Assert.That(result[i].r, Is.EqualTo(src[i].r), $"Pixel {i} R");
-            Assert.That(result[i].g, Is.EqualTo(src[i].g), $"Pixel {i} G");
-            Assert.That(result[i].b, Is.EqualTo(src[i].b), $"Pixel {i} B");
-        }
+        Assert.That(result.GetLength(0), Is.EqualTo(2));
+        for (int h = 0; h < 2; h++)
+            for (int w = 0; w < 2; w++)
+                for (int c = 0; c < 3; c++)
+                    Assert.That(result[h, w, c], Is.EqualTo(src[h, w, c]).Within(Tolerance), $"[{h},{w},{c}]");
     }
 
     // =======================================================

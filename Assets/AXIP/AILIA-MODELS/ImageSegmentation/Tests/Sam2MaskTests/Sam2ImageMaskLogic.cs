@@ -149,16 +149,32 @@ namespace Sam2MaskTests
             return output;
         }
 
-        public Color32[] ResizeColor32(Color32[] src, int srcWidth, int srcHeight, int dstWidth, int dstHeight)
+        public float[,,] ResizeBilinearHWC(float[,,] src, int srcHeight, int srcWidth, int dstHeight, int dstWidth)
         {
-            Color32[] dst = new Color32[dstWidth * dstHeight];
+            float[,,] dst = new float[dstHeight, dstWidth, 3];
+            float scaleY = dstHeight > 1 ? (float)(srcHeight - 1) / (dstHeight - 1) : 0;
+            float scaleX = dstWidth > 1 ? (float)(srcWidth - 1) / (dstWidth - 1) : 0;
+
             for (int y = 0; y < dstHeight; y++)
             {
-                int srcY = y * srcHeight / dstHeight;
+                float srcY = y * scaleY;
+                int y0 = (int)Math.Floor(srcY);
+                int y1 = Math.Min(y0 + 1, srcHeight - 1);
+                float dy = srcY - y0;
+
                 for (int x = 0; x < dstWidth; x++)
                 {
-                    int srcX = x * srcWidth / dstWidth;
-                    dst[y * dstWidth + x] = src[srcY * srcWidth + srcX];
+                    float srcX = x * scaleX;
+                    int x0 = (int)Math.Floor(srcX);
+                    int x1 = Math.Min(x0 + 1, srcWidth - 1);
+                    float dx = srcX - x0;
+
+                    for (int c = 0; c < 3; c++)
+                    {
+                        float top = (1 - dx) * src[y0, x0, c] + dx * src[y0, x1, c];
+                        float bottom = (1 - dx) * src[y1, x0, c] + dx * src[y1, x1, c];
+                        dst[y, x, c] = (1 - dy) * top + dy * bottom;
+                    }
                 }
             }
             return dst;
@@ -166,22 +182,25 @@ namespace Sam2MaskTests
 
         public float[,,,] PreprocessImage(Color32[] inputImage, int originalWidth, int originalHeight, int imageSize)
         {
-            int newWidth = imageSize;
-            int newHeight = imageSize;
-            Color32[] resizedImage = ResizeColor32(inputImage, originalWidth, originalHeight, newWidth, newHeight);
-            float[,,] floatImage = Color32ArrayToFloatArray(resizedImage, newHeight, newWidth);
+            // Match SAM2 original: ToTensor -> Resize(bilinear) -> Normalize
+            // 1. Convert to float [0,1]
+            float[,,] floatImage = Color32ArrayToFloatArray(inputImage, originalHeight, originalWidth);
 
-            for (int h = 0; h < newHeight; h++)
-                for (int w = 0; w < newWidth; w++)
+            // 2. Bilinear resize to (imageSize, imageSize)
+            float[,,] resizedImage = ResizeBilinearHWC(floatImage, originalHeight, originalWidth, imageSize, imageSize);
+
+            // 3. Normalize
+            for (int h = 0; h < imageSize; h++)
+                for (int w = 0; w < imageSize; w++)
                     for (int c = 0; c < 3; c++)
-                        floatImage[h, w, c] = (floatImage[h, w, c] - Mean[c]) / Std[c];
+                        resizedImage[h, w, c] = (resizedImage[h, w, c] - Mean[c]) / Std[c];
 
-            float[,,] chw = TransposeHWCtoCHW(floatImage);
+            float[,,] chw = TransposeHWCtoCHW(resizedImage);
 
-            float[,,,] batch = new float[1, 3, newHeight, newWidth];
+            float[,,,] batch = new float[1, 3, imageSize, imageSize];
             for (int c = 0; c < 3; c++)
-                for (int h = 0; h < newHeight; h++)
-                    for (int w = 0; w < newWidth; w++)
+                for (int h = 0; h < imageSize; h++)
+                    for (int w = 0; w < imageSize; w++)
                         batch[0, c, h, w] = chw[c, h, w];
 
             return batch;
