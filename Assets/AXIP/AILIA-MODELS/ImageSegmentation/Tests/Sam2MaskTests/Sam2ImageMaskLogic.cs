@@ -152,19 +152,21 @@ namespace Sam2MaskTests
         public float[,,] ResizeBilinearHWC(float[,,] src, int srcHeight, int srcWidth, int dstHeight, int dstWidth)
         {
             float[,,] dst = new float[dstHeight, dstWidth, 3];
-            float scaleY = dstHeight > 1 ? (float)(srcHeight - 1) / (dstHeight - 1) : 0;
-            float scaleX = dstWidth > 1 ? (float)(srcWidth - 1) / (dstWidth - 1) : 0;
+            float scaleY = (float)srcHeight / dstHeight;
+            float scaleX = (float)srcWidth / dstWidth;
 
             for (int y = 0; y < dstHeight; y++)
             {
-                float srcY = y * scaleY;
+                float srcY = (y + 0.5f) * scaleY - 0.5f;
+                srcY = Math.Max(0, Math.Min(srcY, srcHeight - 1));
                 int y0 = (int)Math.Floor(srcY);
                 int y1 = Math.Min(y0 + 1, srcHeight - 1);
                 float dy = srcY - y0;
 
                 for (int x = 0; x < dstWidth; x++)
                 {
-                    float srcX = x * scaleX;
+                    float srcX = (x + 0.5f) * scaleX - 0.5f;
+                    srcX = Math.Max(0, Math.Min(srcX, srcWidth - 1));
                     int x0 = (int)Math.Floor(srcX);
                     int x1 = Math.Min(x0 + 1, srcWidth - 1);
                     float dx = srcX - x0;
@@ -236,19 +238,21 @@ namespace Sam2MaskTests
             int srcWidth = src.GetLength(1);
             float[,] result = new float[targetHeight, targetWidth];
 
-            float scaleY = (float)(srcHeight - 1) / (targetHeight - 1);
-            float scaleX = (float)(srcWidth - 1) / (targetWidth - 1);
+            float scaleY = (float)srcHeight / targetHeight;
+            float scaleX = (float)srcWidth / targetWidth;
 
             for (int y = 0; y < targetHeight; y++)
             {
-                float srcY = y * scaleY;
+                float srcY = (y + 0.5f) * scaleY - 0.5f;
+                srcY = Math.Max(0, Math.Min(srcY, srcHeight - 1));
                 int y0 = (int)Math.Floor(srcY);
                 int y1 = Math.Min(y0 + 1, srcHeight - 1);
                 float dy = srcY - y0;
 
                 for (int x = 0; x < targetWidth; x++)
                 {
-                    float srcX = x * scaleX;
+                    float srcX = (x + 0.5f) * scaleX - 0.5f;
+                    srcX = Math.Max(0, Math.Min(srcX, srcWidth - 1));
                     int x0 = (int)Math.Floor(srcX);
                     int x1 = Math.Min(x0 + 1, srcWidth - 1);
                     float dx = srcX - x0;

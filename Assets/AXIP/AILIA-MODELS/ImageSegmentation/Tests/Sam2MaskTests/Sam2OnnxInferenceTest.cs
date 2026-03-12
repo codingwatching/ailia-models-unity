@@ -1,17 +1,16 @@
 /* SAM2 ONNX Inference Comparison Test */
 /* Copyright 2025 AXELL CORPORATION and ax Inc. */
 /*
- * End-to-end inference test: feeds the Python-preprocessed tensor through
- * C# ONNX pipeline (encoder -> prompt encoder -> mask decoder) and
- * compares the resulting mask against the Python SAM2 reference output.
+ * All tests use PNG input (lossless) to ensure zero decoder difference
+ * between PIL (Python) and ImageSharp (C#).
  *
- * JPEG decoding differs between PIL (Python) and ImageSharp (C#), so
- * we use the Python preprocessed tensor to isolate the ONNX comparison.
- * A separate test verifies C# preprocessing logic is correct.
- *
- * Test image: truck.jpg (1800x1200)
+ * Test image: truck.png (1800x1200, lossless PNG)
  * Click point: (500, 375), label=1 (foreground)
  * Models: segment-anything-2 (Hiera-L)
+ *
+ * Tests:
+ *   1. Preprocess_PngZeroError: C# preprocessing matches Python exactly (error=0)
+ *   2. FullInference_PngEndToEnd: C# preprocess + ONNX inference matches Python mask
  */
 
 using NUnit.Framework;
@@ -30,7 +29,7 @@ public class Sam2OnnxInferenceTest
     private Sam2ImageMaskLogic logic = null!;
 
     private const string MODEL_DIR = "/tmp/sam2_models";
-    private const string IMAGE_PATH = "/home/user/ailia-models-unity/Assets/AXIP/AILIA-MODELS/ImageSegmentation/SampleImage/truck.jpg";
+    private const string PNG_IMAGE_PATH = "/tmp/sam2_test_output/truck.png";
     private const string PYTHON_OUTPUT_DIR = "/tmp/sam2_test_output";
     private const string CSHARP_OUTPUT_DIR = "/tmp/sam2_csharp_output";
 
@@ -39,7 +38,7 @@ public class Sam2OnnxInferenceTest
     private const int CLICK_Y = 375;
     private const int POINT_LABEL = 1;
 
-    // Image dimensions (truck.jpg)
+    // Image dimensions (truck.png)
     private const int IMG_W = 1800;
     private const int IMG_H = 1200;
 
@@ -57,17 +56,10 @@ public class Sam2OnnxInferenceTest
             && File.Exists(Path.Combine(MODEL_DIR, "prompt_encoder_hiera_l.onnx"));
     }
 
-    private bool PythonOutputExists()
-    {
-        return File.Exists(Path.Combine(PYTHON_OUTPUT_DIR, "best_mask_bool.npy"))
-            && File.Exists(Path.Combine(PYTHON_OUTPUT_DIR, "metadata.json"))
-            && File.Exists(Path.Combine(PYTHON_OUTPUT_DIR, "preprocess_output.npy"));
-    }
-
     // =======================================================
-    // Load image as Color32 array
+    // Load PNG image as Color32 array
     // =======================================================
-    private (Color32[] pixels, int width, int height) LoadImage(string path)
+    private (Color32[] pixels, int width, int height) LoadPngImage(string path)
     {
         using var image = SixLabors.ImageSharp.Image.Load<Rgb24>(path);
         int w = image.Width;
@@ -165,13 +157,13 @@ public class Sam2OnnxInferenceTest
                     bool cs = csharpMask[y, x];
                     bool py = pythonMask[y, x];
                     if (cs && py)
-                        row[x] = new Rgb24(255, 255, 255);  // Both true (white)
+                        row[x] = new Rgb24(255, 255, 255);
                     else if (cs && !py)
-                        row[x] = new Rgb24(255, 0, 0);      // Only C# (red)
+                        row[x] = new Rgb24(255, 0, 0);
                     else if (!cs && py)
-                        row[x] = new Rgb24(0, 0, 255);      // Only Python (blue)
+                        row[x] = new Rgb24(0, 0, 255);
                     else
-                        row[x] = new Rgb24(0, 0, 0);        // Both false (black)
+                        row[x] = new Rgb24(0, 0, 0);
                 }
             }
         });
@@ -202,7 +194,6 @@ public class Sam2OnnxInferenceTest
         foreach (var kv in encShapes)
             Console.WriteLine($"  {kv.Key}: [{string.Join(",", kv.Value)}]");
 
-        // PrepareBackboneFeatures
         var fpn0Shape = encShapes["backbone_fpn_0"];
         var fpn1Shape = encShapes["backbone_fpn_1"];
         var fpn2Shape = encShapes["backbone_fpn_2"];
@@ -214,7 +205,6 @@ public class Sam2OnnxInferenceTest
         float[][,,,] backboneFpn = new[] { fpn0_4d, fpn1_4d, fpn2_4d };
         float[][,,] visionFeats = logic.PrepareBackboneFeatures(backboneFpn);
 
-        // no_mem_embed = zeros (deterministic, matching Python test)
         int hidden_dim = 256;
         float[,,] noMemEmbed = new float[1, 1, hidden_dim];
         float[,,] lastFeat = visionFeats[^1];
@@ -257,82 +247,11 @@ public class Sam2OnnxInferenceTest
     }
 
     // =======================================================
-    // 1. Preprocessing logic verification
+    // Run prompt encoder + mask decoder
     // =======================================================
-    [Test]
-    public void Preprocess_LogicMatchesPython()
+    private (bool[,] bestMask, int bestIdx, float bestScore, bool[][,] allMasks, float[] iouPred)
+        RunDecoder(float[] imageEmbFlat, float[] highResFeat0, float[] highResFeat1)
     {
-        if (!File.Exists(Path.Combine(PYTHON_OUTPUT_DIR, "preprocess_output.npy")))
-            Assert.Ignore("Python preprocess output not found.");
-
-        var (pixels, imgW, imgH) = LoadImage(IMAGE_PATH);
-        float[,,,] csharpResult = logic.PreprocessImage(pixels, imgW, imgH, 1024);
-        float[] csharpFlat = logic.Flatten4D(csharpResult);
-        float[] pythonFlat = LoadNpyFloat1D(Path.Combine(PYTHON_OUTPUT_DIR, "preprocess_output.npy"));
-
-        Assert.That(csharpFlat.Length, Is.EqualTo(pythonFlat.Length),
-            $"Tensor size: C#={csharpFlat.Length} vs Python={pythonFlat.Length}");
-
-        // JPEG decoders (PIL vs ImageSharp) produce slightly different pixel values.
-        // The preprocessing LOGIC is identical (nearest-neighbor resize + ImageNet normalize),
-        // but input pixels differ by up to ~3 RGB levels due to DCT rounding.
-        // Expected: max error ~0.5 (normalized), avg error < 0.01
-        double maxErr = 0, sumErr = 0;
-        int mismatchCount = 0;
-        for (int i = 0; i < csharpFlat.Length; i++)
-        {
-            double err = Math.Abs(csharpFlat[i] - pythonFlat[i]);
-            maxErr = Math.Max(maxErr, err);
-            sumErr += err;
-            if (err > 0.01) mismatchCount++;
-        }
-        double avgErr = sumErr / csharpFlat.Length;
-
-        Console.WriteLine($"Preprocess comparison ({csharpFlat.Length} values):");
-        Console.WriteLine($"  Max error: {maxErr:E6} (due to JPEG decoder difference)");
-        Console.WriteLine($"  Avg error: {avgErr:E6}");
-        Console.WriteLine($"  Values with error > 0.01: {mismatchCount} ({100.0*mismatchCount/csharpFlat.Length:F2}%)");
-
-        // JPEG decoder differences up to 26 RGB levels; after /255 and /std (~0.226), max error can reach ~1.1
-        Assert.That(maxErr, Is.LessThan(1.5),
-            $"Max error too large (exceeds JPEG decoder tolerance): {maxErr:E6}");
-        Assert.That(avgErr, Is.LessThan(0.05),
-            $"Average error too large: {avgErr:E6}");
-    }
-
-    // =======================================================
-    // 2. Full ONNX inference (using Python preprocessed input)
-    // =======================================================
-    [Test]
-    public void FullInference_MaskMatchesPython()
-    {
-        if (!ModelsExist())
-            Assert.Ignore("ONNX models not found in " + MODEL_DIR);
-        if (!PythonOutputExists())
-            Assert.Ignore("Python output not found. Run sam2_python_inference.py first.");
-
-        Console.WriteLine("=== C# SAM2 ONNX Inference (using Python preprocessed input) ===");
-
-        // Use Python's preprocessed tensor to eliminate JPEG decoder differences
-        float[] nchwInput = LoadNpyFloat1D(Path.Combine(PYTHON_OUTPUT_DIR, "preprocess_output.npy"));
-        Console.WriteLine($"Input tensor: {nchwInput.Length} values, range=[{nchwInput.Min():F4}, {nchwInput.Max():F4}]");
-
-        // ========== Encoder ==========
-        var (imageEmbFlat, highResFeat0, highResFeat1) = RunEncoder(nchwInput);
-
-        // Compare encoder output with Python
-        float[] pyEncoderOut = LoadNpyFloat1D(Path.Combine(PYTHON_OUTPUT_DIR, "encoder_output.npy"));
-        double encMaxErr = 0, encSumErr = 0;
-        for (int i = 0; i < Math.Min(imageEmbFlat.Length, pyEncoderOut.Length); i++)
-        {
-            double err = Math.Abs(imageEmbFlat[i] - pyEncoderOut[i]);
-            encMaxErr = Math.Max(encMaxErr, err);
-            encSumErr += err;
-        }
-        Console.WriteLine($"Encoder output max error vs Python: {encMaxErr:E6}");
-        Console.WriteLine($"Encoder output avg error vs Python: {encSumErr / pyEncoderOut.Length:E6}");
-
-        // ========== Prompt Encoder ==========
         var promptSession = new InferenceSession(
             Path.Combine(MODEL_DIR, "prompt_encoder_hiera_l.onnx"));
 
@@ -368,10 +287,6 @@ public class Sam2OnnxInferenceTest
         var denseEmbShape = promptMap["dense_embeddings"].AsTensor<float>().Dimensions.ToArray();
         var densePeShape = promptMap["dense_pe"].AsTensor<float>().Dimensions.ToArray();
 
-        Console.WriteLine($"Sparse embeddings: [{string.Join(",", sparseShape)}]");
-        Console.WriteLine($"Dense embeddings: [{string.Join(",", denseEmbShape)}]");
-
-        // ========== Mask Decoder ==========
         var decoderSession = new InferenceSession(
             Path.Combine(MODEL_DIR, "mask_decoder_hiera_l.onnx"));
 
@@ -401,87 +316,155 @@ public class Sam2OnnxInferenceTest
         Console.WriteLine($"Raw masks shape: [{string.Join(",", masksShape)}]");
         Console.WriteLine($"IoU predictions: [{string.Join(", ", iouPred.Select(v => $"{v:F4}"))}]");
 
-        // ========== Postprocess ==========
         float[,,,] masks4d = logic.ReshapeTo4D(masksRaw,
             masksShape[0], masksShape[1], masksShape[2], masksShape[3]);
         float[,,,] resizedMasks = logic.PostprocessMasks(masks4d, IMG_H, IMG_W);
         bool[][,] boolMasks = logic.ConvertToBoolMasks(resizedMasks, 0.0f);
 
-        // Find best mask
         int bestIdx = 0;
         float maxScore = float.MinValue;
         for (int i = 0; i < iouPred.Length; i++)
             if (iouPred[i] > maxScore) { maxScore = iouPred[i]; bestIdx = i; }
 
-        bool[,] bestMask = boolMasks[bestIdx];
-        int trueCount = 0;
-        for (int y = 0; y < IMG_H; y++)
-            for (int x = 0; x < IMG_W; x++)
-                if (bestMask[y, x]) trueCount++;
+        return (boolMasks[bestIdx], bestIdx, maxScore, boolMasks, iouPred);
+    }
 
-        Console.WriteLine($"\nBest mask: index={bestIdx}, score={maxScore:F4}");
-        Console.WriteLine($"True pixels: {trueCount}/{IMG_W * IMG_H} ({100.0 * trueCount / (IMG_W * IMG_H):F1}%)");
+    // =======================================================
+    // Compare two masks and return match rate
+    // =======================================================
+    private (double matchRate, int diffCount, int onlyCsharp, int onlyPython)
+        CompareMasks(bool[,] csharpMask, bool[,] pythonMask)
+    {
+        int h = csharpMask.GetLength(0), w = csharpMask.GetLength(1);
+        int matchCount = 0, diffCount = 0, onlyCsharp = 0, onlyPython = 0;
 
-        // Save C# mask
-        SaveMaskPng(bestMask, Path.Combine(CSHARP_OUTPUT_DIR, "csharp_mask.png"));
-
-        // ========== Compare with Python ==========
-        bool[,] pythonMask = LoadNpyBool(Path.Combine(PYTHON_OUTPUT_DIR, "best_mask_bool.npy"));
-
-        Assert.That(bestMask.GetLength(0), Is.EqualTo(pythonMask.GetLength(0)), "Mask height");
-        Assert.That(bestMask.GetLength(1), Is.EqualTo(pythonMask.GetLength(1)), "Mask width");
-
-        // Pixel-by-pixel diff
-        int matchCount = 0, diffCount = 0;
-        int onlyCsharp = 0, onlyPython = 0;
-        for (int y = 0; y < IMG_H; y++)
+        for (int y = 0; y < h; y++)
         {
-            for (int x = 0; x < IMG_W; x++)
+            for (int x = 0; x < w; x++)
             {
-                if (bestMask[y, x] == pythonMask[y, x])
+                if (csharpMask[y, x] == pythonMask[y, x])
                     matchCount++;
                 else
                 {
                     diffCount++;
-                    if (bestMask[y, x]) onlyCsharp++;
+                    if (csharpMask[y, x]) onlyCsharp++;
                     else onlyPython++;
                 }
             }
         }
 
-        double matchRate = 100.0 * matchCount / (IMG_W * IMG_H);
+        double matchRate = 100.0 * matchCount / (h * w);
+        return (matchRate, diffCount, onlyCsharp, onlyPython);
+    }
 
-        Console.WriteLine($"\n=== Mask Comparison ===");
+    // =======================================================
+    // 1. Preprocess PNG: verify zero error vs Python
+    // =======================================================
+    [Test]
+    public void Preprocess_PngZeroError()
+    {
+        string pngPreprocessPath = Path.Combine(PYTHON_OUTPUT_DIR, "preprocess_output_png.npy");
+        if (!File.Exists(pngPreprocessPath))
+            Assert.Ignore("Python PNG preprocess output not found.");
+        if (!File.Exists(PNG_IMAGE_PATH))
+            Assert.Ignore("PNG test image not found.");
+
+        var (pixels, imgW, imgH) = LoadPngImage(PNG_IMAGE_PATH);
+        Assert.That(imgW, Is.EqualTo(IMG_W), "Image width");
+        Assert.That(imgH, Is.EqualTo(IMG_H), "Image height");
+
+        float[,,,] csharpResult = logic.PreprocessImage(pixels, imgW, imgH, 1024);
+        float[] csharpFlat = logic.Flatten4D(csharpResult);
+        float[] pythonFlat = LoadNpyFloat1D(pngPreprocessPath);
+
+        Assert.That(csharpFlat.Length, Is.EqualTo(pythonFlat.Length),
+            $"Tensor size: C#={csharpFlat.Length} vs Python={pythonFlat.Length}");
+
+        // PNG is lossless: both decoders produce identical pixels.
+        // Only float32 precision differences expected (< 1e-6).
+        double maxErr = 0, sumErr = 0;
+        int mismatchCount = 0;
+        for (int i = 0; i < csharpFlat.Length; i++)
+        {
+            double err = Math.Abs(csharpFlat[i] - pythonFlat[i]);
+            maxErr = Math.Max(maxErr, err);
+            sumErr += err;
+            if (err > 1e-5) mismatchCount++;
+        }
+        double avgErr = sumErr / csharpFlat.Length;
+
+        Console.WriteLine($"PNG Preprocess comparison ({csharpFlat.Length} values):");
+        Console.WriteLine($"  Max error: {maxErr:E6}");
+        Console.WriteLine($"  Avg error: {avgErr:E6}");
+        Console.WriteLine($"  Values with error > 1e-5: {mismatchCount}");
+
+        // With PNG input, only float32 rounding differences remain
+        Assert.That(maxErr, Is.LessThan(1e-4),
+            $"PNG preprocess max error should be near zero: {maxErr:E6}");
+        Assert.That(avgErr, Is.LessThan(1e-6),
+            $"PNG preprocess avg error should be near zero: {avgErr:E6}");
+        Assert.That(mismatchCount, Is.EqualTo(0),
+            $"No values should differ by more than 1e-5 with PNG input");
+    }
+
+    // =======================================================
+    // 2. End-to-end: C# preprocess PNG + ONNX -> mask == Python
+    // =======================================================
+    [Test]
+    public void FullInference_PngEndToEnd()
+    {
+        if (!ModelsExist())
+            Assert.Ignore("ONNX models not found in " + MODEL_DIR);
+        string pngMaskPath = Path.Combine(PYTHON_OUTPUT_DIR, "best_mask_bool_png.npy");
+        string pngMetaPath = Path.Combine(PYTHON_OUTPUT_DIR, "metadata_png.json");
+        if (!File.Exists(pngMaskPath) || !File.Exists(pngMetaPath))
+            Assert.Ignore("Python PNG reference output not found.");
+        if (!File.Exists(PNG_IMAGE_PATH))
+            Assert.Ignore("PNG test image not found.");
+
+        Console.WriteLine("=== C# SAM2 End-to-End (PNG preprocess + ONNX inference) ===");
+
+        // Step 1: C# preprocesses the PNG image
+        var (pixels, imgW, imgH) = LoadPngImage(PNG_IMAGE_PATH);
+        float[,,,] preprocessed = logic.PreprocessImage(pixels, imgW, imgH, 1024);
+        float[] nchwInput = logic.Flatten4D(preprocessed);
+        Console.WriteLine($"C# preprocessed tensor: {nchwInput.Length} values, range=[{nchwInput.Min():F4}, {nchwInput.Max():F4}]");
+
+        // Step 2: Run encoder
+        var (imageEmbFlat, highResFeat0, highResFeat1) = RunEncoder(nchwInput);
+
+        // Step 3: Run decoder
+        var (bestMask, bestIdx, bestScore, allMasks, iouPred) =
+            RunDecoder(imageEmbFlat, highResFeat0, highResFeat1);
+
+        int trueCount = 0;
+        for (int y = 0; y < IMG_H; y++)
+            for (int x = 0; x < IMG_W; x++)
+                if (bestMask[y, x]) trueCount++;
+
+        Console.WriteLine($"Best mask: index={bestIdx}, score={bestScore:F4}");
+        Console.WriteLine($"True pixels: {trueCount}/{IMG_W * IMG_H} ({100.0 * trueCount / (IMG_W * IMG_H):F1}%)");
+
+        SaveMaskPng(bestMask, Path.Combine(CSHARP_OUTPUT_DIR, "csharp_mask_png_e2e.png"));
+
+        // Step 4: Compare with Python reference
+        bool[,] pythonMask = LoadNpyBool(pngMaskPath);
+        Assert.That(bestMask.GetLength(0), Is.EqualTo(pythonMask.GetLength(0)), "Mask height");
+        Assert.That(bestMask.GetLength(1), Is.EqualTo(pythonMask.GetLength(1)), "Mask width");
+
+        var (matchRate, diffCount, onlyCsharp, onlyPython) = CompareMasks(bestMask, pythonMask);
+
+        Console.WriteLine($"\n=== Mask Comparison (PNG End-to-End) ===");
         Console.WriteLine($"Total pixels: {IMG_W * IMG_H}");
-        Console.WriteLine($"Matching: {matchCount} ({matchRate:F4}%)");
+        Console.WriteLine($"Matching: {IMG_W * IMG_H - diffCount} ({matchRate:F4}%)");
         Console.WriteLine($"Different: {diffCount} ({100.0 * diffCount / (IMG_W * IMG_H):F4}%)");
         Console.WriteLine($"  Only in C#: {onlyCsharp}");
         Console.WriteLine($"  Only in Python: {onlyPython}");
 
-        // Save diff image
-        SaveDiffPng(bestMask, pythonMask, Path.Combine(CSHARP_OUTPUT_DIR, "diff_mask.png"));
-        Console.WriteLine($"\nDiff image saved to: {CSHARP_OUTPUT_DIR}/diff_mask.png");
-        Console.WriteLine($"  White = both agree (true), Black = both agree (false)");
-        Console.WriteLine($"  Red = only C# (true), Blue = only Python (true)");
+        SaveDiffPng(bestMask, pythonMask, Path.Combine(CSHARP_OUTPUT_DIR, "diff_mask_png_e2e.png"));
 
-        // Save all mask counts
-        Console.WriteLine($"\nAll C# mask true counts:");
-        for (int m = 0; m < boolMasks.Length; m++)
-        {
-            int cnt = 0;
-            for (int y = 0; y < IMG_H; y++)
-                for (int x = 0; x < IMG_W; x++)
-                    if (boolMasks[m][y, x]) cnt++;
-            Console.WriteLine($"  Mask {m}: {cnt}/{IMG_W * IMG_H} ({100.0 * cnt / (IMG_W * IMG_H):F1}%), score={iouPred[m]:F4}");
-        }
-
-        // Assert: same input tensor should produce identical ONNX output
-        // With same input, masks should match >99% (tiny differences from bilinear resize at boundaries)
-        Assert.That(matchRate, Is.GreaterThan(99.0),
-            $"Mask match rate should be > 99%, got {matchRate:F4}%");
-
-        // Check best mask index matches
-        string pyMetaJson = File.ReadAllText(Path.Combine(PYTHON_OUTPUT_DIR, "metadata.json"));
+        // Check best mask index
+        string pyMetaJson = File.ReadAllText(pngMetaPath);
         int pyBestIdx = -1;
         foreach (var line in pyMetaJson.Split('\n'))
         {
@@ -494,5 +477,10 @@ public class Sam2OnnxInferenceTest
         }
         Assert.That(bestIdx, Is.EqualTo(pyBestIdx),
             $"Best mask index: C#={bestIdx} vs Python={pyBestIdx}");
+
+        // With identical PNG input, ONNX inference should produce identical masks
+        // (same preprocessing -> same encoder input -> same output)
+        Assert.That(matchRate, Is.GreaterThan(99.0),
+            $"End-to-end mask match rate should be > 99%, got {matchRate:F4}%");
     }
 }

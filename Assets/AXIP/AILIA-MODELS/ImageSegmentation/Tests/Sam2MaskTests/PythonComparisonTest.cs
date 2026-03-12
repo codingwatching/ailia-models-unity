@@ -194,12 +194,8 @@ public class PythonComparisonTest
     }
 
     // -----------------------------------------------------------
-    // 6. Bilinear resize 2x2->4x4 vs Python (align_corners=True)
-    //    Python output:
-    //    [[0.0000, 0.3333, 0.6667, 1.0000],
-    //     [0.6667, 1.0000, 1.3333, 1.6667],
-    //     [1.3333, 1.6667, 2.0000, 2.3333],
-    //     [2.0000, 2.3333, 2.6667, 3.0000]]
+    // 6. Bilinear resize 2x2->4x4 vs Python (align_corners=False)
+    //    Python: F.interpolate(src, (4,4), mode='bilinear', align_corners=False)
     // -----------------------------------------------------------
     [Test]
     public void Python_BilinearResize_2x2To4x4()
@@ -210,10 +206,10 @@ public class PythonComparisonTest
 
         float[,] pythonRef = new float[,]
         {
-            { 0.00000000f, 0.33333334f, 0.66666669f, 1.00000000f },
-            { 0.66666669f, 1.00000012f, 1.33333349f, 1.66666675f },
-            { 1.33333337f, 1.66666687f, 2.00000024f, 2.33333325f },
-            { 2.00000000f, 2.33333349f, 2.66666675f, 3.00000000f },
+            { 0.00000000f, 0.25000000f, 0.75000000f, 1.00000000f },
+            { 0.50000000f, 0.75000000f, 1.25000000f, 1.50000000f },
+            { 1.50000000f, 1.75000000f, 2.25000000f, 2.50000000f },
+            { 2.00000000f, 2.25000000f, 2.75000000f, 3.00000000f },
         };
 
         for (int y = 0; y < 4; y++)
@@ -223,10 +219,10 @@ public class PythonComparisonTest
     }
 
     // -----------------------------------------------------------
-    // 7. Mask postprocess: resize 2x2->4x4 + threshold
-    //    Python: 4 masks, each 2x2 -> 4x4 bilinear -> > 0.0
-    //    Mask 0: 1/16 true, Mask 1: 16/16 true,
-    //    Mask 2: 12/16 true, Mask 3: 0/16 true
+    // 7. Mask postprocess: resize 2x2->4x4 + threshold (align_corners=False)
+    //    Python: F.interpolate(masks, (4,4), mode='bilinear', align_corners=False)
+    //    Mask 0: 2/16 true, Mask 1: 16/16 true,
+    //    Mask 2: 11/16 true, Mask 3: 0/16 true
     // -----------------------------------------------------------
     [Test]
     public void Python_MaskPostprocess_Resize()
@@ -243,38 +239,34 @@ public class PythonComparisonTest
 
         float[,,,] resized = logic.PostprocessMasks(rawMasks, 4, 4);
 
-        // Python reference: resized mask values
-        // Mask 0
+        // Python reference (align_corners=False)
         float[,] pyMask0 = new float[,]
         {
-            { -5.0000f, -4.3333f, -3.6667f, -3.0000f },
-            { -3.6667f, -3.0556f, -2.4444f, -1.8333f },
-            { -2.3333f, -1.7778f, -1.2222f, -0.6667f },
-            { -1.0000f, -0.5000f,  0.0000f,  0.5000f },
+            { -5.0000f, -4.5000f, -3.5000f, -3.0000f },
+            { -4.0000f, -3.5312f, -2.5938f, -2.1250f },
+            { -2.0000f, -1.5938f, -0.7812f, -0.3750f },
+            { -1.0000f, -0.6250f,  0.1250f,  0.5000f },
         };
-        // Mask 1
         float[,] pyMask1 = new float[,]
         {
-            {  5.0000f,  6.0000f,  7.0000f,  8.0000f },
-            {  5.3333f,  6.4444f,  7.5556f,  8.6667f },
-            {  5.6667f,  6.8889f,  8.1111f,  9.3333f },
-            {  6.0000f,  7.3333f,  8.6667f, 10.0000f },
+            {  5.0000f,  5.7500f,  7.2500f,  8.0000f },
+            {  5.2500f,  6.0625f,  7.6875f,  8.5000f },
+            {  5.7500f,  6.6875f,  8.5625f,  9.5000f },
+            {  6.0000f,  7.0000f,  9.0000f, 10.0000f },
         };
-        // Mask 2
         float[,] pyMask2 = new float[,]
         {
-            { -2.0000f, -0.3333f,  1.3333f,  3.0000f },
-            {  0.0000f,  0.5556f,  1.1111f,  1.6667f },
-            {  2.0000f,  1.4444f,  0.8889f,  0.3333f },
-            {  4.0000f,  2.3333f,  0.6667f, -1.0000f },
+            { -2.0000f, -0.7500f,  1.7500f,  3.0000f },
+            { -0.5000f,  0.1250f,  1.3750f,  2.0000f },
+            {  2.5000f,  1.8750f,  0.6250f,  0.0000f },
+            {  4.0000f,  2.7500f,  0.2500f, -1.0000f },
         };
-        // Mask 3
         float[,] pyMask3 = new float[,]
         {
-            { -1.0000f, -1.3333f, -1.6667f, -2.0000f },
-            { -1.6667f, -2.0000f, -2.3333f, -2.6667f },
-            { -2.3333f, -2.6667f, -3.0000f, -3.3333f },
-            { -3.0000f, -3.3333f, -3.6667f, -4.0000f },
+            { -1.0000f, -1.2500f, -1.7500f, -2.0000f },
+            { -1.5000f, -1.7500f, -2.2500f, -2.5000f },
+            { -2.5000f, -2.7500f, -3.2500f, -3.5000f },
+            { -3.0000f, -3.2500f, -3.7500f, -4.0000f },
         };
 
         float[][,] pyMasks = { pyMask0, pyMask1, pyMask2, pyMask3 };
@@ -303,13 +295,10 @@ public class PythonComparisonTest
         float[,,,] resized = logic.PostprocessMasks(rawMasks, 4, 4);
         bool[][,] boolMasks = logic.ConvertToBoolMasks(resized, 0.0f);
 
-        // Python (float64): [1, 16, 12, 0] true pixels per mask
-        // Note: Mask0[3,2]=0.0 exactly in Python (float64), but C# float32
-        // bilinear may produce a tiny positive value due to rounding.
-        // This 1-pixel difference at exact threshold boundary is expected
-        // float32 vs float64 behavior, not a logic error.
-        int[] pythonTrueCount = { 1, 16, 12, 0 };
-        int[] allowedDelta = { 1, 0, 1, 0 }; // tolerance for boundary pixels
+        // Python (align_corners=False): [2, 16, 11, 0] true pixels per mask
+        // Mask2[2,3]=0.0 exactly at boundary; float32 may vary by 1 pixel.
+        int[] pythonTrueCount = { 2, 16, 11, 0 };
+        int[] allowedDelta = { 0, 0, 1, 0 }; // tolerance for boundary pixels
 
         for (int c = 0; c < 4; c++)
         {
@@ -322,11 +311,9 @@ public class PythonComparisonTest
                 $"Mask{c}: C# true count={trueCount} vs Python={pythonTrueCount[c]} (delta tolerance={allowedDelta[c]}, boundary float32 precision)");
         }
 
-        // Also verify the exact numerical values at the boundary pixels
-        // Mask0[3,2]: Python=0.0000 (bilinear interpolation of -5,-3,-1,0.5)
-        // The value should be very close to 0.0 regardless
-        Assert.That(Math.Abs(resized[0, 0, 3, 2]), Is.LessThan(1e-3f),
-            $"Mask0[3,2] boundary value={resized[0, 0, 3, 2]:E6} should be ~0.0");
+        // Verify boundary pixel: Mask2[2,3]=0.0 in Python (align_corners=False)
+        Assert.That(Math.Abs(resized[0, 2, 2, 3]), Is.LessThan(1e-3f),
+            $"Mask2[2,3] boundary value={resized[0, 2, 2, 3]:E6} should be ~0.0");
     }
 
     // -----------------------------------------------------------
@@ -485,13 +472,13 @@ public class PythonComparisonTest
 
         float[,] dst = logic.ResizeBilinear(src, 4, 4);
 
-        // Python reference values (exact from generate_sam2_reference.py, Mask 0)
+        // Python reference values (align_corners=False, Mask 0)
         float[,] pyRef = new float[,]
         {
-            { -5.0000f, -4.3333f, -3.6667f, -3.0000f },
-            { -3.6667f, -3.0556f, -2.4444f, -1.8333f },
-            { -2.3333f, -1.7778f, -1.2222f, -0.6667f },
-            { -1.0000f, -0.5000f,  0.0000f,  0.5000f },
+            { -5.0000f, -4.5000f, -3.5000f, -3.0000f },
+            { -4.0000f, -3.5312f, -2.5938f, -2.1250f },
+            { -2.0000f, -1.5938f, -0.7812f, -0.3750f },
+            { -1.0000f, -0.6250f,  0.1250f,  0.5000f },
         };
 
         double maxError = 0;
@@ -508,8 +495,8 @@ public class PythonComparisonTest
     }
 
     // -----------------------------------------------------------
-    // 12. Mask 2 detailed comparison (partial mask)
-    //     Python: 12/16 true pixels with specific pattern
+    // 12. Mask 2 detailed comparison (partial mask, align_corners=False)
+    //     Python: 11/16 true pixels with specific pattern
     // -----------------------------------------------------------
     [Test]
     public void Python_Mask2_DetailedBoolPattern()
@@ -523,17 +510,12 @@ public class PythonComparisonTest
         float[,,,] resized = logic.PostprocessMasks(rawMasks, 4, 4);
         bool[][,] boolMasks = logic.ConvertToBoolMasks(resized, 0.0f);
 
-        // Python bool mask pattern for Mask 2 (float64):
+        // Python bool mask pattern (align_corners=False):
         // [False, False, True,  True ]
         // [False, True,  True,  True ]
-        // [True,  True,  True,  True ]
         // [True,  True,  True,  False]
-        //
-        // Note: [1,0] has value 0.0000 in Python (float64). With C# float32,
-        // bilinear interpolation may produce a tiny positive value, flipping
-        // the bool result. This is expected float32 precision behavior.
+        // [True,  True,  True,  False]
 
-        // Verify non-boundary values match exactly
         // Clearly positive values -> True
         Assert.That(boolMasks[0][0, 2], Is.True, "[0,2]: clearly positive");
         Assert.That(boolMasks[0][0, 3], Is.True, "[0,3]: clearly positive");
@@ -543,7 +525,6 @@ public class PythonComparisonTest
         Assert.That(boolMasks[0][2, 0], Is.True, "[2,0]: clearly positive");
         Assert.That(boolMasks[0][2, 1], Is.True, "[2,1]: clearly positive");
         Assert.That(boolMasks[0][2, 2], Is.True, "[2,2]: clearly positive");
-        Assert.That(boolMasks[0][2, 3], Is.True, "[2,3]: clearly positive");
         Assert.That(boolMasks[0][3, 0], Is.True, "[3,0]: clearly positive");
         Assert.That(boolMasks[0][3, 1], Is.True, "[3,1]: clearly positive");
         Assert.That(boolMasks[0][3, 2], Is.True, "[3,2]: clearly positive");
@@ -551,12 +532,12 @@ public class PythonComparisonTest
         // Clearly negative values -> False
         Assert.That(boolMasks[0][0, 0], Is.False, "[0,0]: clearly negative");
         Assert.That(boolMasks[0][0, 1], Is.False, "[0,1]: clearly negative");
+        Assert.That(boolMasks[0][1, 0], Is.False, "[1,0]: clearly negative");
         Assert.That(boolMasks[0][3, 3], Is.False, "[3,3]: clearly negative");
 
-        // Boundary value [1,0]: Python float64 = 0.0000, C# float32 may differ
-        // Verify the numerical value is very close to zero (within float32 precision)
-        Assert.That(Math.Abs(resized[0, 0, 1, 0]), Is.LessThan(1e-3f),
-            $"Mask2[1,0] boundary value={resized[0, 0, 1, 0]:E6} should be ~0.0 (Python: 0.0000)");
+        // Boundary value [2,3]: Python = 0.0000 (align_corners=False)
+        Assert.That(Math.Abs(resized[0, 0, 2, 3]), Is.LessThan(1e-3f),
+            $"Mask2[2,3] boundary value={resized[0, 0, 2, 3]:E6} should be ~0.0");
     }
 
     // -----------------------------------------------------------
