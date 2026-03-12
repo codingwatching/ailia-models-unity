@@ -451,11 +451,8 @@ public class SegmentAnything2Model
 
             float[][,,] visionFeats = PrepareBackboneFeatures(backboneData);
 
-            int hidden_dim = 256;
-            float[,,] noMemEmbed = TruncNormal(1, 1, hidden_dim, 0.02f);
-            float[,,] lastFeat = visionFeats[visionFeats.Length - 1];
-            float[,,] updatedFeat = BroadcastAdd3D(lastFeat, noMemEmbed);
-            visionFeats[visionFeats.Length - 1] = updatedFeat;
+            // Note: no_mem_embed is NOT added for single-image inference.
+            // In Python SAM2ImagePredictor, no_mem_embed is only used in video tracking mode.
 
             (int height, int width)[] bbFeatSizes = new (int, int)[]
             {
