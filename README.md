@@ -89,10 +89,20 @@ The collection of pre-trained, state-of-the-art models for Unity.
 
 ## Large Language model
 
-| Name | Detail | Exported From | Supported Ailia Version | Blog |
+| Name | Detail | Exported From | Supported Ailia LLM Version | Blog |
 |:-----------|------------:|:------------:|:------------:|:------------:|
-| [gemma2](/Assets/AXIP/AILIA-MODELS/LargeLanguageModel/) | [gemma-2-2b](https://huggingface.co/google/gemma-2-2b) | Llama.cpp | | |
-| [llama3.2](/Assets/AXIP/AILIA-MODELS/LargeLanguageModel/) | [llama3.2-3b](https://huggingface.co/meta-llama/Llama-3.2-3B) | Llama.cpp | | |
+| [gemma2](/Assets/AXIP/AILIA-MODELS/LargeLanguageModel/) | [gemma-2-2b](https://huggingface.co/google/gemma-2-2b) | Llama.cpp | 1.3.0 | |
+| [gemma3-1b](/Assets/AXIP/AILIA-MODELS/LargeLanguageModel/) | [gemma-3-1b](https://huggingface.co/google/gemma-3-1b-it) | Llama.cpp | 1.3.0 | |
+| [gemma3](/Assets/AXIP/AILIA-MODELS/LargeLanguageModel/) | [gemma-3-4b](https://huggingface.co/google/gemma-3-4b-it) | Llama.cpp | 1.3.0 | |
+| [gemma3n-E2B](/Assets/AXIP/AILIA-MODELS/LargeLanguageModel/) | [gemma-3n-E2B](https://huggingface.co/unsloth/gemma-3n-E2B-it-GGUF) | Llama.cpp | 1.4.0 | |
+| [gemma3n-E4B](/Assets/AXIP/AILIA-MODELS/LargeLanguageModel/) | [gemma-3n-E4B](https://huggingface.co/unsloth/gemma-3n-E2B-it-GGUF) | Llama.cpp | 1.4.0 | |
+| [llama3.2](/Assets/AXIP/AILIA-MODELS/LargeLanguageModel/) | [llama3.2-3b](https://huggingface.co/meta-llama/Llama-3.2-3B) | Llama.cpp | 1.3.0 | |
+
+## Vision Language model
+
+| Name | Detail | Exported From | Supported Ailia LLM Version | Blog |
+|:-----------|------------:|:------------:|:------------:|:------------:|
+| [gemma3](/Assets/AXIP/AILIA-MODELS/VisionLanguageModel/) | [gemma-3-4b](https://huggingface.co/google/gemma-3-4b-it) | Llama.cpp | 1.4.0 | |
 
 ## Object detection
 
@@ -104,8 +114,8 @@ The collection of pre-trained, state-of-the-art models for Unity.
 | [yolov2-tiny](/Assets/AXIP/AILIA-MODELS/ObjectDetection/) | [YOLO: Real-Time Object Detection](https://pjreddie.com/darknet/yolo/) | Pytorch | 1.2.0 and later ||
 | [yolov3](/Assets/AXIP/AILIA-MODELS/ObjectDetection/) | [YOLO: Real-Time Object Detection](https://pjreddie.com/darknet/yolo/) | ONNX Runtime | 1.2.1 and later | [EN](https://medium.com/axinc-ai/yolov3-a-machine-learning-model-to-detect-the-position-and-type-of-an-object-60f1c18f8107) [JP](https://medium.com/axinc/yolov3-66c9b998c096) |
 | [yolov3-tiny](/Assets/AXIP/AILIA-MODELS/ObjectDetection/) | [YOLO: Real-Time Object Detection](https://pjreddie.com/darknet/yolo/) | ONNX Runtime | 1.2.1 and later ||
-| [yolov3-face](/Assets/AXIP/AILIA-MODELS/ObjectDetection/) | [Face detection using keras-yolov3](https://github.com/axinc-ai/yolov3-face) | Keras | 1.2.1 and later ||
-| [yolov3-hand](/Assets/AXIP/AILIA-MODELS/ObjectDetection/) | [Hand detection branch of Face detection using keras-yolov3](https://github.com/axinc-ai/yolov3-face/tree/hand_detection) | Keras | 1.2.1 and later ||
+| [yolov3-face](/Assets/AXIP/AILIA-MODELS/ObjectDetection/) | [Face detection using keras-yolov3](https://github.com/ailia-ai/yolov3-face) | Keras | 1.2.1 and later ||
+| [yolov3-hand](/Assets/AXIP/AILIA-MODELS/ObjectDetection/) | [Hand detection branch of Face detection using keras-yolov3](https://github.com/ailia-ai/yolov3-face/tree/hand_detection) | Keras | 1.2.1 and later ||
 | [yolov4](/Assets/AXIP/AILIA-MODELS/ObjectDetection/) | [YOLO: Real-Time Object Detection](https://pjreddie.com/darknet/yolo/) | Pytorch | 1.2.7 and later ||
 | [yolov4-tiny](/Assets/AXIP/AILIA-MODELS/ObjectDetection/) | [YOLO: Real-Time Object Detection](https://pjreddie.com/darknet/yolo/) | Pytorch | 1.2.7 and later ||
 | [yolox](/Assets/AXIP/AILIA-MODELS/ObjectDetection/) | [YOLOX](https://github.com/Megvii-BaseDetection/YOLOX) | Pytorch | 1.2.9 and later | [EN](https://medium.com/axinc-ai/yolox-object-detection-model-exceeding-yolov5-d6cea6d3c4bc) [JP](https://medium.com/axinc/yolox-yolov5%E3%82%92%E8%B6%85%E3%81%88%E3%82%8B%E7%89%A9%E4%BD%93%E6%A4%9C%E5%87%BA%E3%83%A2%E3%83%87%E3%83%AB-e9706e15fef2) |
@@ -132,6 +142,7 @@ The collection of pre-trained, state-of-the-art models for Unity.
 | Name | Detail | Exported From | Supported Ailia Version | Blog |
 |:-----------|------------:|:------------:|:------------:|:------------:|
 | [whisper](/Assets/AXIP/AILIA-MODELS/SpeechToText/) | [Whisper](https://github.com/openai/whisper) | Pytorch | 1.3.0 and later | [JP](https://medium.com/axinc/whisper-%E6%97%A5%E6%9C%AC%E8%AA%9E%E3%82%92%E5%90%AB%E3%82%8099%E8%A8%80%E8%AA%9E%E3%82%92%E8%AA%8D%E8%AD%98%E3%81%A7%E3%81%8D%E3%82%8B%E9%9F%B3%E5%A3%B0%E8%AA%8D%E8%AD%98%E3%83%A2%E3%83%87%E3%83%AB-b6e578f55c87) |
+| [sensevoice](/Assets/AXIP/AILIA-MODELS/SpeechToText/) | [SenseVoice](https://github.com/FunAudioLLM/SenseVoice) | Pytorch | 1.2.13 and later | |
 
 ## Style transfer
 
@@ -151,6 +162,7 @@ The collection of pre-trained, state-of-the-art models for Unity.
 | Name | Detail | Exported From | Supported Ailia Version | Blog |
 |:-----------|------------:|:------------:|:------------:|:------------:|
 | [paddleocr](/Assets/AXIP/AILIA-MODELS/TextRecognition/) | [PaddleOCR : Awesome multilingual OCR toolkits based on PaddlePaddle](https://github.com/PaddlePaddle/PaddleOCR) | Pytorch | 1.2.6 and later | [EN](https://medium.com/axinc-ai/paddleocr-the-latest-lightweight-ocr-system-a13171d7ea3e) [JP](https://medium.com/axinc/paddleocr-%E6%9C%80%E6%96%B0%E3%81%AE%E8%BB%BD%E9%87%8Focr%E3%82%B7%E3%82%B9%E3%83%86%E3%83%A0-8744205f3703) |
+| [paddleocr_v3](/Assets/AXIP/AILIA-MODELS/TextRecognition) | [PaddleOCR : Awesome multilingual OCR toolkits based on PaddlePaddle](https://github.com/PaddlePaddle/PaddleOCR) | Pytorch | 1.2.17 and later | [JP](https://medium.com/axinc/paddleocr-v3-%E6%97%A5%E6%9C%AC%E8%AA%9E%E3%81%8C%E9%AB%98%E7%B2%BE%E5%BA%A6%E5%8C%96%E3%81%97%E3%81%9F%E6%9C%80%E6%96%B0%E3%81%AEocr%E3%83%A2%E3%83%87%E3%83%AB-7dfa93a3dfcd) |
 
 ## Text to Speech
 
@@ -158,6 +170,10 @@ The collection of pre-trained, state-of-the-art models for Unity.
 |:-----------|------------:|:------------:|:------------:|:------------:|
 | [tacotron2](/Assets/AXIP/AILIA-MODELS/TextToSpeech/) | [Tacotron2](https://github.com/NVIDIA/tacotron2) | Pytorch | 1.2.15 and later | [JP](https://medium.com/axinc/tacotron2-%E6%B3%A2%E5%BD%A2%E5%A4%89%E6%8F%9B%E3%82%92ai%E3%81%A7%E8%A1%8C%E3%81%86%E9%AB%98%E5%93%81%E8%B3%AA%E3%81%AA%E9%9F%B3%E5%A3%B0%E5%90%88%E6%88%90%E3%83%A2%E3%83%87%E3%83%AB-bc592217a399) |
 | [gpt-sovits](/Assets/AXIP/AILIA-MODELS/TextToSpeech/) | [GPT-SoVITS](https://github.com/RVC-Boss/GPT-SoVITS) | Pytorch | 1.4.0 and later | [JP](https://medium.com/axinc/gpt-sovits-%E3%83%95%E3%82%A1%E3%82%A4%E3%83%B3%E3%83%81%E3%83%A5%E3%83%BC%E3%83%8B%E3%83%B3%E3%82%B0%E3%81%A7%E3%81%8D%E3%82%8B0%E3%82%B7%E3%83%A7%E3%83%83%E3%83%88%E3%81%AE%E9%9F%B3%E5%A3%B0%E5%90%88%E6%88%90%E3%83%A2%E3%83%87%E3%83%AB-2212eeb5ad20) |
+| [gpt-sovits-v2](/Assets/AXIP/AILIA-MODELS/TextToSpeech/) | [GPT-SoVITS v2](https://github.com/RVC-Boss/GPT-SoVITS) | Pytorch | 1.4.0 and later | |
+| [gpt-sovits-v3](/Assets/AXIP/AILIA-MODELS/TextToSpeech/) | [GPT-SoVITS v3](https://github.com/RVC-Boss/GPT-SoVITS) | Pytorch | 1.4.0 and later | |
+| [gpt-sovits-v2-pro](/Assets/AXIP/AILIA-MODELS/TextToSpeech/) | [GPT-SoVITS v2 Pro](https://github.com/RVC-Boss/GPT-SoVITS) | Pytorch | 1.4.0 and later | |
+| [gpt-sovits-v2-pro-distill](/Assets/AXIP/AILIA-MODELS/TextToSpeech/) | [GPT-SoVITS v2 Pro Distill](https://github.com/RVC-Boss/GPT-SoVITS) | Pytorch | 1.4.0 and later | |
 
 ## Face detection
 
@@ -187,6 +203,7 @@ The collection of pre-trained, state-of-the-art models for Unity.
 |:-----------|------------:|:------------:|:------------:|:------------:|
 |[sentence_transformers_japanese](/Assets/AXIP/AILIA-MODELS/NaturalLanguageProcessing/) | [sentence transformers](https://huggingface.co/sentence-transformers/paraphrase-multilingual-mpnet-base-v2) | Pytorch | 1.2.7 and later | [JP](https://medium.com/axinc/sentencetransformer-%E3%83%86%E3%82%AD%E3%82%B9%E3%83%88%E3%81%8B%E3%82%89embedding%E3%82%92%E5%8F%96%E5%BE%97%E3%81%99%E3%82%8B%E8%A8%80%E8%AA%9E%E5%87%A6%E7%90%86%E3%83%A2%E3%83%87%E3%83%AB-b7d2a9bb2c31) |
 |[multilingual-e5](/Assets/AXIP/AILIA-MODELS/NaturalLanguageProcessing/) | [multilingual-e5-base](https://huggingface.co/intfloat/multilingual-e5-base) | Pytorch | 1.2.15 and later | [JP](https://medium.com/axinc/multilingual-e5-%E5%A4%9A%E8%A8%80%E8%AA%9E%E3%81%AE%E3%83%86%E3%82%AD%E3%82%B9%E3%83%88%E3%82%92embedding%E3%81%99%E3%82%8B%E6%A9%9F%E6%A2%B0%E5%AD%A6%E7%BF%92%E3%83%A2%E3%83%87%E3%83%AB-71f1dec7c4f0) |
+|[embeddinggemma](/Assets/AXIP/AILIA-MODELS/NaturalLanguageProcessing/) | [EmbeddingGemma](https://ai.google.dev/gemma/docs/embeddinggemma?hl=ja) | Pytorch | 1.2.14 and later | [JP](https://kyakuno.medium.com/embedding-gemma-google%E3%81%AE%E9%96%8B%E7%99%BA%E3%81%97%E3%81%9F%E8%BB%BD%E9%87%8F%E3%81%A7%E9%AB%98%E7%B2%BE%E5%BA%A6%E3%81%AAembedding%E3%83%A2%E3%83%87%E3%83%AB-9ec139ddfde9) |
 |[fugumt-en-ja](/Assets/AXIP/AILIA-MODELS/NaturalLanguageProcessing/) | [Fugu-Machine Translator](https://github.com/s-taka/fugumt)   | Pytorch | 1.2.9 and later | [JP](https://medium.com/axinc/fugumt-%E8%8B%B1%E8%AA%9E%E3%81%8B%E3%82%89%E6%97%A5%E6%9C%AC%E8%AA%9E%E3%81%B8%E3%81%AE%E7%BF%BB%E8%A8%B3%E3%82%92%E8%A1%8C%E3%81%86%E6%A9%9F%E6%A2%B0%E5%AD%A6%E7%BF%92%E3%83%A2%E3%83%87%E3%83%AB-46b839c1b4ae) |
 |[fugumt-ja-en](/Assets/AXIP/AILIA-MODELS/NaturalLanguageProcessing/) | [Fugu-Machine Translator](https://github.com/s-taka/fugumt)   | Pytorch | 1.2.10 abd later |
 
@@ -194,10 +211,10 @@ The collection of pre-trained, state-of-the-art models for Unity.
 
 [ailia SDK Tutorial (Unity)](https://medium.com/axinc-ai/ailia-sdk-tutorial-unity-54f2a8155b8f)
 
-[ailia Unity API](https://axinc-ai.github.io/ailia-sdk/api/unity/en/)
+[ailia Unity API](https://ailia-ai.github.io/ailia-sdk/api/unity/en/)
 
 # Other languages
 
-[python version](https://github.com/axinc-ai/ailia-models)
+[python version](https://github.com/ailia-ai/ailia-models)
 
-[c++ version](https://github.com/axinc-ai/ailia-models-cpp)
+[c++ version](https://github.com/ailia-ai/ailia-models-cpp)

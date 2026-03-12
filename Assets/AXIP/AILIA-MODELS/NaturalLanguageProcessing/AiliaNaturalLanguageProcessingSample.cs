@@ -19,6 +19,7 @@ namespace ailiaSDK
 		{
 			sentence_transformer_japanese,
 			multilingual_e5,
+			embeddinggemma,
 			fugumt_en_ja,
 			fugumt_ja_en
 		}
@@ -101,15 +102,29 @@ namespace ailiaSDK
 			ailia_download.DownloaderProgressPanel = UICanvas.transform.Find("DownloaderProgressPanel").gameObject;
 			var urlList = new List<ModelDownloadURL>();
 
+			int tokenizer_type = -1;
+			string tokenizer_model = "";
+			
 			if (modelType == NaturalLanguageProcessingSampleModels.sentence_transformer_japanese){
 				urlList.Add(new ModelDownloadURL() { folder_path = "sentence-transformers-japanese", file_name = "paraphrase-multilingual-mpnet-base-v2.onnx.prototxt" });
 				urlList.Add(new ModelDownloadURL() { folder_path = "sentence-transformers-japanese", file_name = "paraphrase-multilingual-mpnet-base-v2.onnx" });
 				urlList.Add(new ModelDownloadURL() { folder_path = "sentence-transformers-japanese", file_name = "sentencepiece.bpe.model" });
+				tokenizer_type = AiliaTokenizer.AILIA_TOKENIZER_TYPE_XLM_ROBERTA;
+				tokenizer_model = "sentencepiece.bpe.model";
 			}
 			if (modelType == NaturalLanguageProcessingSampleModels.multilingual_e5){
 				urlList.Add(new ModelDownloadURL() { folder_path = "multilingual-e5", file_name = "multilingual-e5-base.onnx.prototxt" });
 				urlList.Add(new ModelDownloadURL() { folder_path = "multilingual-e5", file_name = "multilingual-e5-base.onnx" });
 				urlList.Add(new ModelDownloadURL() { folder_path = "multilingual-e5", file_name = "sentencepiece.bpe.model" });
+				tokenizer_type = AiliaTokenizer.AILIA_TOKENIZER_TYPE_XLM_ROBERTA;
+				tokenizer_model = "sentencepiece.bpe.model";
+			}
+			if (modelType == NaturalLanguageProcessingSampleModels.embeddinggemma){
+				urlList.Add(new ModelDownloadURL() { folder_path = "embeddinggemma", file_name = "embeddinggemma-300m.onnx.prototxt" });
+				urlList.Add(new ModelDownloadURL() { folder_path = "embeddinggemma", file_name = "embeddinggemma-300m.onnx" });
+				urlList.Add(new ModelDownloadURL() { folder_path = "embeddinggemma", file_name = "tokenizer.model" });
+				tokenizer_type = AiliaTokenizer.AILIA_TOKENIZER_TYPE_GEMMA;
+				tokenizer_model = "tokenizer.model";
 			}
 			if (modelType == NaturalLanguageProcessingSampleModels.fugumt_en_ja){
 				urlList.Add(new ModelDownloadURL() { folder_path = "fugumt-en-ja", file_name = "seq2seq-lm-with-past.onnx", local_name = "fugumt_en_ja_seq2seq-lm-with-past.onnx" });
@@ -131,6 +146,9 @@ namespace ailiaSDK
 				if (modelType == NaturalLanguageProcessingSampleModels.multilingual_e5){
 					modelPrepared = ailiaModel.OpenFile(asset_path + "/" + "multilingual-e5-base.onnx.prototxt", asset_path + "/" + "multilingual-e5-base.onnx");
 				}
+				if (modelType == NaturalLanguageProcessingSampleModels.embeddinggemma){
+					modelPrepared = ailiaModel.OpenFile(asset_path + "/" + "embeddinggemma-300m.onnx.prototxt", asset_path + "/" + "embeddinggemma-300m.onnx");
+				}
 				if (modelType == NaturalLanguageProcessingSampleModels.fugumt_en_ja || modelType == NaturalLanguageProcessingSampleModels.fugumt_ja_en){
 					int env_id = ailia_speech_translate.GetEnvironmentId(gpu_mode);
 					int memory_mode = Ailia.AILIA_MEMORY_REDUCE_CONSTANT | Ailia.AILIA_MEMORY_REDUCE_CONSTANT_WITH_INPUT_INITIALIZER | Ailia.AILIA_MEMORY_REUSE_INTERSTAGE;
@@ -146,14 +164,14 @@ namespace ailiaSDK
 					Debug.Log("ailiaModel.OpenFile failed");
 				}
 
-				if (modelType == NaturalLanguageProcessingSampleModels.sentence_transformer_japanese || modelType == NaturalLanguageProcessingSampleModels.multilingual_e5){
+				if (tokenizer_type != -1){
 					if (modelPrepared){
-						modelPrepared = ailiaTokenizer.Create(AiliaTokenizer.AILIA_TOKENIZER_TYPE_XLM_ROBERTA, AiliaTokenizer.AILIA_TOKENIZER_FLAG_NONE);
+						modelPrepared = ailiaTokenizer.Create(tokenizer_type, AiliaTokenizer.AILIA_TOKENIZER_FLAG_NONE);
 						if (modelPrepared == false){
 							Debug.Log("ailiaTokenizer.Create failed");
 						}
 						if (modelPrepared){
-							modelPrepared = ailiaTokenizer.Open(asset_path + "/sentencepiece.bpe.model");
+							modelPrepared = ailiaTokenizer.Open(asset_path + "/" + tokenizer_model);
 							if (modelPrepared == false){
 								Debug.Log("ailiaTokenizer.Open failed");
 							}
@@ -173,10 +191,17 @@ namespace ailiaSDK
 			}
 
 			string result = "";
-			if (modelType == NaturalLanguageProcessingSampleModels.sentence_transformer_japanese || modelType == NaturalLanguageProcessingSampleModels.multilingual_e5){
+			if (modelType == NaturalLanguageProcessingSampleModels.sentence_transformer_japanese || modelType == NaturalLanguageProcessingSampleModels.multilingual_e5 || modelType == NaturalLanguageProcessingSampleModels.embeddinggemma){
 				if (chunk_cnt < chunk_text.Length){
 					long start_time = DateTime.UtcNow.Ticks / TimeSpan.TicksPerMillisecond;
-					chunk_embedding.Add(textEmbedding.Embedding(chunk_text[chunk_cnt], ailiaModel, ailiaTokenizer));
+					string prompt = "";
+					if (modelType == NaturalLanguageProcessingSampleModels.multilingual_e5) {
+						prompt = "passage: ";
+					}
+					if (modelType == NaturalLanguageProcessingSampleModels.embeddinggemma) {
+						prompt = "title: none | text: ";
+					}
+					chunk_embedding.Add(textEmbedding.Embedding(prompt + chunk_text[chunk_cnt], ailiaModel, ailiaTokenizer));
 					result = "Embedding : "+chunk_text[chunk_cnt]+"\n";
 					chunk_cnt++;
 					long end_time = DateTime.UtcNow.Ticks / TimeSpan.TicksPerMillisecond;
@@ -222,10 +247,17 @@ namespace ailiaSDK
 				label_text.text = result;
 			}
 
-			if (modelType == NaturalLanguageProcessingSampleModels.sentence_transformer_japanese || modelType == NaturalLanguageProcessingSampleModels.multilingual_e5){
+			if (modelType == NaturalLanguageProcessingSampleModels.sentence_transformer_japanese || modelType == NaturalLanguageProcessingSampleModels.multilingual_e5 || modelType == NaturalLanguageProcessingSampleModels.embeddinggemma){
 				long start_time = DateTime.UtcNow.Ticks / TimeSpan.TicksPerMillisecond;
 				if (chunk_cnt >= chunk_text.Length){
-					float [] query_embedding = textEmbedding.Embedding(query_text, ailiaModel, ailiaTokenizer);
+					string prompt = "";
+					if (modelType == NaturalLanguageProcessingSampleModels.multilingual_e5) {
+						prompt = "query: ";
+					}
+					if (modelType == NaturalLanguageProcessingSampleModels.embeddinggemma) {
+						prompt = "task: search result | query: ";
+					}
+					float [] query_embedding = textEmbedding.Embedding(prompt + query_text, ailiaModel, ailiaTokenizer);
 					float max_sim = 0.0f;
 					for (int i = 0; i < chunk_cnt; i++){
 						float sim = textEmbedding.CosSimilarity(query_embedding, chunk_embedding[i]);
