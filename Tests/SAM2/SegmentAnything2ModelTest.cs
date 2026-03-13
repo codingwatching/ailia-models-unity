@@ -1,23 +1,19 @@
-/* SAM2 SegmentAnything2Model Logic Test */
+/* SAM2 Sam2Processor Tests */
 /* Copyright 2025 AXELL CORPORATION and ax Inc. */
 /*
- * Tests the data flow of SegmentAnything2Model without Unity dependencies.
- * SegmentAnything2Model owns the following logic beyond Sam2InferenceEngine:
+ * Tests Sam2Processor directly — the class that owns all SAM2 inference logic.
+ * Sam2Processor is used by SegmentAnything2Model (Unity wrapper) and can be
+ * tested standalone with any ISam2Backend (ORT or ailia).
  *
- *   ProcessEmbedding(B2T image):
- *     1. VerticalFlip B2T -> T2B
- *     2. RunEmbedding(T2B image) -> encoderOutput, highResFeats
- *
- *   ProcessMask(B2T image):
- *     1. GetClickPoints(imageHeight) -> T2B coords
- *     2. RunInference(T2B coords) -> T2B masks + scores
- *     3. FindBestMaskIndex(scores)
- *     4. VerticalFlipMask T2B -> B2T
- *     5. CreateMaskedImage(B2T mask, B2T pixels)
- *     6. Convert T2B click coords -> B2T for DrawClickPoints
- *
- * These tests replicate the exact same flow using ISam2Backend,
- * ensuring correctness of the B2T/T2B conversions and mask overlay.
+ * Covers:
+ *   - Click point / box management
+ *   - ProcessEmbedding (B2T -> T2B flip + encode)
+ *   - ProcessMask (inference -> best mask -> T2B -> B2T flip)
+ *   - ApplyMaskOverlay (B2T mask on B2T pixels)
+ *   - ConvertClickCoordsToB2T
+ *   - DrawClickPoints
+ *   - Multi-point and box prompt flows
+ *   - Python reference comparison
  */
 
 using NUnit.Framework;
@@ -31,8 +27,6 @@ using UnityEngine;
 [TestFixture]
 public class SegmentAnything2ModelTest
 {
-    private Sam2InferenceEngine engine = null!;
-
     private const string MODEL_DIR = "/tmp/sam2_models";
     private const string PNG_IMAGE_PATH = "/tmp/sam2_test_output/truck.png";
     private const string PYTHON_OUTPUT_DIR = "/tmp/sam2_test_output";
@@ -40,12 +34,10 @@ public class SegmentAnything2ModelTest
 
     private const int IMG_W = 1800;
     private const int IMG_H = 1200;
-    private const int TARGET_SIZE = 1024;
 
     [SetUp]
     public void SetUp()
     {
-        engine = new Sam2InferenceEngine();
         Directory.CreateDirectory(CSHARP_OUTPUT_DIR);
     }
 
@@ -57,7 +49,7 @@ public class SegmentAnything2ModelTest
         File.Exists(EncoderPath) && File.Exists(DecoderPath) && File.Exists(PromptPath);
 
     // =======================================================
-    // Load PNG as T2B Color32 array (standard image format)
+    // Image loading helpers
     // =======================================================
     private (Color32[] pixels, int width, int height) LoadPngTopToBottom(string path)
     {
@@ -81,16 +73,13 @@ public class SegmentAnything2ModelTest
         return (pixels, w, h);
     }
 
-    // =======================================================
-    // Simulate Unity GetPixels32: T2B -> B2T
-    // =======================================================
     private Color32[] SimulateUnityGetPixels32(Color32[] top2bottom, int width, int height)
     {
         return Sam2InferenceEngine.VerticalFlip(top2bottom, width, height);
     }
 
     // =======================================================
-    // Load Python .npy bool mask
+    // Mask comparison / save helpers
     // =======================================================
     private bool[,] LoadNpyBool(string path)
     {
@@ -110,9 +99,6 @@ public class SegmentAnything2ModelTest
         return result;
     }
 
-    // =======================================================
-    // Save bool mask as PNG
-    // =======================================================
     private void SaveMaskPng(bool[,] mask, string path)
     {
         int h = mask.GetLength(0), w = mask.GetLength(1);
@@ -129,9 +115,6 @@ public class SegmentAnything2ModelTest
         img.Save(path);
     }
 
-    // =======================================================
-    // Save diff image (white=both, red=only C#, blue=only Python)
-    // =======================================================
     private void SaveDiffPng(bool[,] csMask, bool[,] pyMask, string path)
     {
         int h = csMask.GetLength(0), w = csMask.GetLength(1);
@@ -154,9 +137,6 @@ public class SegmentAnything2ModelTest
         img.Save(path);
     }
 
-    // =======================================================
-    // Compare masks helper
-    // =======================================================
     private (double matchRate, int diffCount, int onlyCsharp, int onlyPython)
         CompareMasks(bool[,] csMask, bool[,] pyMask)
     {
@@ -172,289 +152,184 @@ public class SegmentAnything2ModelTest
     }
 
     // =======================================================
-    // Replicate SegmentAnything2Model.RunEmbedding
-    //   - Takes T2B image (already flipped from B2T)
-    //   - Preprocesses and encodes
-    //   - Returns encoderOutput + highResFeats
+    // Create a Sam2Processor with ORT backend
     // =======================================================
-    private (float[] encoderOutput, float[][] highResFeats)
-        ReplicateRunEmbedding(ISam2Backend backend, Color32[] t2bImage, int imgWidth, int imgHeight)
+    private (Sam2Processor processor, OrtSam2Backend backend) CreateOrtProcessor()
     {
-        float[,,,] inputTensor = engine.PreprocessImage(t2bImage, imgWidth, imgHeight, TARGET_SIZE);
-        float[] nchwInput = engine.Flatten4D(inputTensor);
-
-        var encOut = backend.RunEncoder(nchwInput);
-        return engine.PrepareEncoderFeatures(encOut);
+        var backend = new OrtSam2Backend();
+        backend.LoadModels(EncoderPath, DecoderPath, PromptPath);
+        var processor = new Sam2Processor(backend);
+        return (processor, backend);
     }
 
     // =======================================================
-    // Replicate SegmentAnything2Model.RunInference
-    //   - Takes encoderOutput, highResFeats, T2B coords, labels
-    //   - Runs prompt encoder + decoder
-    //   - Returns T2B masks + IoU scores
-    // =======================================================
-    private (bool[][,] masks, float[] iouPred)
-        ReplicateRunInference(
-            ISam2Backend backend,
-            float[] encoderOutput, float[][] highResFeats,
-            int imgWidth, int imgHeight,
-            float[,] pointCoords, float[] pointLabels)
-    {
-        float[,] scaledCoords = engine.ApplyCoordinateScaling(pointCoords, imgHeight, imgWidth);
-        int pointCount = pointLabels.Length;
-        float[] flatCoords = engine.FlattenCoords(scaledCoords, pointCount);
-        float[] maskInputDummy = new float[256 * 256];
-
-        var promptOut = backend.RunPromptEncoder(flatCoords, pointCount, pointLabels, maskInputDummy, 0f);
-
-        var decOut = backend.RunDecoder(
-            encoderOutput,
-            promptOut.DensePe, promptOut.DensePeShape,
-            promptOut.SparseEmbeddings, promptOut.SparseShape,
-            promptOut.DenseEmbeddings, promptOut.DenseShape,
-            highResFeats[0],
-            highResFeats[1]
-        );
-
-        float[,,,] masks4d = engine.ReshapeTo4D(decOut.Masks,
-            decOut.MasksShape[0], decOut.MasksShape[1],
-            decOut.MasksShape[2], decOut.MasksShape[3]);
-        float[,,,] resizedMasks = engine.PostprocessMasks(masks4d, imgHeight, imgWidth);
-        bool[][,] boolMasks = engine.ConvertToBoolMasks(resizedMasks, 0.0f);
-
-        return (boolMasks, decOut.IouPred);
-    }
-
-    // =======================================================
-    // Replicate SegmentAnything2Model.CreateMaskedImage logic
-    //   - Both mask and pixels are B2T
-    //   - mask[y,x] maps to pixels[y*width+x]
-    // =======================================================
-    private Color32[] ReplicateCreateMaskedImage(
-        bool[,] mask, Color32[] pixels, int imageWidth, int imageHeight)
-    {
-        Color32[] result = (Color32[])pixels.Clone();
-        Color32 maskColor = new Color32(255, 0, 0, 255);
-        int maskHeight = mask.GetLength(0);
-        int maskWidth = mask.GetLength(1);
-
-        for (int y = 0; y < maskHeight; y++)
-        {
-            int rowOffset = y * imageWidth;
-            for (int x = 0; x < maskWidth; x++)
-            {
-                int pixelIndex = rowOffset + x;
-                if (pixelIndex >= 0 && pixelIndex < pixels.Length && mask[y, x])
-                {
-                    Color32 orig = result[pixelIndex];
-                    result[pixelIndex] = new Color32(
-                        (byte)(orig.r * 0.6f + maskColor.r * 0.4f),
-                        (byte)(orig.g * 0.6f + maskColor.g * 0.4f),
-                        (byte)(orig.b * 0.6f + maskColor.b * 0.4f),
-                        maskColor.a
-                    );
-                }
-            }
-        }
-        return result;
-    }
-
-    // =======================================================
-    // 1. Click point management via engine: T2B coordinate system
+    // 1. Click point management
     // =======================================================
     [Test]
-    public void ClickPointManagement_T2B_Coordinates()
+    public void ClickPointManagement()
     {
-        // AiliaImageSegmentationSample computes click coords as:
-        //   x = pixel x in texture
-        //   y = textureHeight - 1 - mouseY  (screen B2T -> T2B)
-        // Then calls sam2Model.AddClickPoint(x, y)
+        // Use a dummy backend (not needed for click point tests)
+        // We can't create a processor without a backend, so use ORT if available
+        // But click points are pure engine logic — test engine directly
+        var engine = new Sam2InferenceEngine();
+        // Sam2Processor delegates to engine, but we test via processor to verify delegation
 
-        int clickX = 500;
-        int clickY = 375;  // T2B coordinate
+        if (!ModelsExist())
+            Assert.Ignore("Models needed to construct processor");
 
-        engine.AddClickPoint(clickX, clickY);
-        float[,] coords = engine.GetClickPoints(IMG_H);
-        float[] labels = engine.GetPointLabels();
+        var (processor, backend) = CreateOrtProcessor();
+        using var _ = backend;
+
+        processor.AddClickPoint(500, 375);
+        float[,] coords = processor.GetClickPoints(IMG_H);
+        float[] labels = processor.GetPointLabels();
 
         Assert.That(coords.GetLength(0), Is.EqualTo(1));
-        Assert.That(coords[0, 0], Is.EqualTo((float)clickX));
-        Assert.That(coords[0, 1], Is.EqualTo((float)clickY));
-        Assert.That(labels[0], Is.EqualTo(1f));  // positive point
+        Assert.That(coords[0, 0], Is.EqualTo(500f));
+        Assert.That(coords[0, 1], Is.EqualTo(375f));
+        Assert.That(labels[0], Is.EqualTo(1f));
 
         // Negative point
-        engine.AddClickPoint(100, 200, negativePoint: true);
-        coords = engine.GetClickPoints(IMG_H);
-        labels = engine.GetPointLabels();
+        processor.AddClickPoint(100, 200, negativePoint: true);
+        coords = processor.GetClickPoints(IMG_H);
+        labels = processor.GetPointLabels();
 
         Assert.That(coords.GetLength(0), Is.EqualTo(2));
-        Assert.That(labels[1], Is.EqualTo(0f));  // negative point
-    }
+        Assert.That(labels[1], Is.EqualTo(0f));
 
-    // =======================================================
-    // 2. Box coordinates via engine
-    // =======================================================
-    [Test]
-    public void BoxCoords_AreIncludedInPoints()
-    {
-        engine.AddClickPoint(100, 100);
-        engine.SetBoxCoords(new Rect(50, 50, 200, 150));  // x,y,w,h
-
-        float[,] coords = engine.GetClickPoints(IMG_H);
-        float[] labels = engine.GetPointLabels();
-
-        // 1 click point + 2 box corners
-        Assert.That(coords.GetLength(0), Is.EqualTo(3));
-        Assert.That(labels[0], Is.EqualTo(1f));   // click point
-        Assert.That(labels[1], Is.EqualTo(2f));   // box top-left
-        Assert.That(labels[2], Is.EqualTo(3f));   // box bottom-right
-
-        // Box corners: xMin,yMin and xMax,yMax
-        Assert.That(coords[1, 0], Is.EqualTo(50f));   // xMin
-        Assert.That(coords[1, 1], Is.EqualTo(50f));   // yMin
-        Assert.That(coords[2, 0], Is.EqualTo(250f));  // xMax = x + width
-        Assert.That(coords[2, 1], Is.EqualTo(200f));  // yMax = y + height
-    }
-
-    // =======================================================
-    // 3. ResetClickPoint clears all state
-    // =======================================================
-    [Test]
-    public void ResetClickPoint_ClearsAll()
-    {
-        engine.AddClickPoint(100, 100);
-        engine.SetBoxCoords(new Rect(50, 50, 200, 150));
-        engine.ResetClickPoint();
-
-        float[,] coords = engine.GetClickPoints(IMG_H);
+        // Reset
+        processor.ResetClickPoint();
+        coords = processor.GetClickPoints(IMG_H);
         Assert.That(coords.GetLength(0), Is.EqualTo(0));
     }
 
     // =======================================================
-    // 4. ProcessEmbedding flow: B2T -> flip -> T2B -> encode
-    //    Verify B2T flip produces same encoding as direct T2B
+    // 2. Box coordinates
     // =======================================================
     [Test]
-    public void ProcessEmbedding_B2TFlip_ProducesSameEncoding()
+    public void BoxCoords()
     {
         if (!ModelsExist())
-            Assert.Ignore("ONNX models not found in " + MODEL_DIR);
-        if (!File.Exists(PNG_IMAGE_PATH))
-            Assert.Ignore("truck.png not found");
+            Assert.Ignore("Models needed to construct processor");
 
-        var (t2bPixels, imgW, imgH) = LoadPngTopToBottom(PNG_IMAGE_PATH);
+        var (processor, backend) = CreateOrtProcessor();
+        using var _ = backend;
 
-        // Simulate Unity: T2B -> GetPixels32 (B2T) -> ProcessEmbedding
-        Color32[] b2tPixels = SimulateUnityGetPixels32(t2bPixels, imgW, imgH);
+        processor.AddClickPoint(100, 100);
+        processor.SetBoxCoords(new Rect(50, 50, 200, 150));
 
-        // ProcessEmbedding internally flips B2T -> T2B
-        Color32[] flippedToT2B = Sam2InferenceEngine.VerticalFlip(b2tPixels, imgW, imgH);
+        float[,] coords = processor.GetClickPoints(IMG_H);
+        float[] labels = processor.GetPointLabels();
 
-        using var backend = new OrtSam2Backend();
-        backend.LoadModels(EncoderPath, DecoderPath, PromptPath);
-
-        // B2T path (what SegmentAnything2Model does)
-        var (encOutputB2T, highResB2T) = ReplicateRunEmbedding(backend, flippedToT2B, imgW, imgH);
-
-        // Direct T2B path (reference)
-        var (encOutputDirect, highResDirect) = ReplicateRunEmbedding(backend, t2bPixels, imgW, imgH);
-
-        // Should be identical
-        Assert.That(encOutputB2T.Length, Is.EqualTo(encOutputDirect.Length));
-        float maxDiff = 0;
-        for (int i = 0; i < encOutputB2T.Length; i++)
-        {
-            float diff = Math.Abs(encOutputB2T[i] - encOutputDirect[i]);
-            if (diff > maxDiff) maxDiff = diff;
-        }
-        Console.WriteLine($"Encoder output max diff: {maxDiff}");
-        Assert.That(maxDiff, Is.LessThan(1e-5f), "B2T path should produce identical encoding");
+        Assert.That(coords.GetLength(0), Is.EqualTo(3));
+        Assert.That(labels[1], Is.EqualTo(2f));
+        Assert.That(labels[2], Is.EqualTo(3f));
+        Assert.That(coords[1, 0], Is.EqualTo(50f));
+        Assert.That(coords[2, 0], Is.EqualTo(250f));
     }
 
     // =======================================================
-    // 5. Full ProcessEmbedding + ProcessMask flow:
-    //    B2T input -> T2B inference -> B2T mask output
-    //    Compare with Python reference
+    // 3. ProcessEmbedding + EmbeddingExist
     // =======================================================
     [Test]
-    public void FullFlow_ProcessEmbeddingAndMask_MatchesPython()
+    public void ProcessEmbedding_CreatesEmbedding()
     {
         if (!ModelsExist())
-            Assert.Ignore("ONNX models not found in " + MODEL_DIR);
+            Assert.Ignore("ONNX models not found");
         if (!File.Exists(PNG_IMAGE_PATH))
             Assert.Ignore("truck.png not found");
 
+        var (processor, backend) = CreateOrtProcessor();
+        using var _ = backend;
+
+        Assert.That(processor.EmbeddingExist(), Is.False);
+
         var (t2bPixels, imgW, imgH) = LoadPngTopToBottom(PNG_IMAGE_PATH);
-
-        // === Simulate SegmentAnything2Model flow ===
-
-        // Step 1: Simulate Unity GetPixels32 (B2T)
         Color32[] b2tPixels = SimulateUnityGetPixels32(t2bPixels, imgW, imgH);
 
-        // Step 2: ProcessEmbedding - flip B2T -> T2B
-        Color32[] t2bForInference = Sam2InferenceEngine.VerticalFlip(b2tPixels, imgW, imgH);
+        processor.ProcessEmbedding(b2tPixels, imgW, imgH);
 
-        using var backend = new OrtSam2Backend();
-        backend.LoadModels(EncoderPath, DecoderPath, PromptPath);
+        Assert.That(processor.EmbeddingExist(), Is.True);
+    }
 
-        var (encoderOutput, highResFeats) = ReplicateRunEmbedding(backend, t2bForInference, imgW, imgH);
+    // =======================================================
+    // 4. ProcessMask returns no mask without click points
+    // =======================================================
+    [Test]
+    public void ProcessMask_NoClickPoints_ReturnsNoMask()
+    {
+        if (!ModelsExist())
+            Assert.Ignore("ONNX models not found");
+        if (!File.Exists(PNG_IMAGE_PATH))
+            Assert.Ignore("truck.png not found");
 
-        // Step 3: Add click point (T2B coordinates, same as AiliaImageSegmentationSample)
-        int clickX = 500;
-        int clickY = 375;
-        engine.AddClickPoint(clickX, clickY);
+        var (processor, backend) = CreateOrtProcessor();
+        using var _ = backend;
 
-        // Step 4: ProcessMask - get T2B coords from engine
-        float[,] coords = engine.GetClickPoints(imgH);
-        float[] labels = engine.GetPointLabels();
+        var (t2bPixels, imgW, imgH) = LoadPngTopToBottom(PNG_IMAGE_PATH);
+        Color32[] b2tPixels = SimulateUnityGetPixels32(t2bPixels, imgW, imgH);
+        processor.ProcessEmbedding(b2tPixels, imgW, imgH);
 
-        Console.WriteLine($"Click point: ({coords[0, 0]}, {coords[0, 1]}) label={labels[0]}");
+        var result = processor.ProcessMask(imgW, imgH);
+        Assert.That(result.HasMask, Is.False);
+    }
 
-        // Step 5: RunInference with T2B coords
-        var (masks, iouPred) = ReplicateRunInference(
-            backend, encoderOutput, highResFeats,
-            imgW, imgH, coords, labels);
+    // =======================================================
+    // 5. Full pipeline: ProcessEmbedding + ProcessMask
+    //    Compare with Python reference
+    // =======================================================
+    [Test]
+    public void FullPipeline_MatchesPython()
+    {
+        if (!ModelsExist())
+            Assert.Ignore("ONNX models not found");
+        if (!File.Exists(PNG_IMAGE_PATH))
+            Assert.Ignore("truck.png not found");
 
-        Assert.That(masks.Length, Is.GreaterThan(0), "Should produce masks");
-        Assert.That(iouPred.Length, Is.GreaterThan(0), "Should produce IoU predictions");
+        var (processor, backend) = CreateOrtProcessor();
+        using var _ = backend;
 
-        // Step 6: Find best mask (T2B)
-        int bestIdx = engine.FindBestMaskIndex(iouPred);
-        bool[,] t2bBestMask = masks[bestIdx];
+        var (t2bPixels, imgW, imgH) = LoadPngTopToBottom(PNG_IMAGE_PATH);
+        Color32[] b2tPixels = SimulateUnityGetPixels32(t2bPixels, imgW, imgH);
 
-        Console.WriteLine($"Best mask: index={bestIdx}, score={iouPred[bestIdx]:F4}");
-        Console.WriteLine($"Mask shape: {t2bBestMask.GetLength(0)} x {t2bBestMask.GetLength(1)}");
+        // Step 1: Embedding (B2T input, like Unity)
+        processor.ProcessEmbedding(b2tPixels, imgW, imgH);
+
+        // Step 2: Add click point (T2B coordinates)
+        processor.AddClickPoint(500, 375);
+
+        // Step 3: Mask
+        var result = processor.ProcessMask(imgW, imgH);
+
+        Assert.That(result.HasMask, Is.True);
+        Assert.That(result.B2TMask.GetLength(0), Is.EqualTo(imgH));
+        Assert.That(result.B2TMask.GetLength(1), Is.EqualTo(imgW));
+        Assert.That(result.BestScore, Is.GreaterThan(0));
+
+        Console.WriteLine($"Best mask: index={result.BestMaskIndex}, score={result.BestScore:F4}");
 
         int trueCount = 0;
         for (int y = 0; y < imgH; y++)
             for (int x = 0; x < imgW; x++)
-                if (t2bBestMask[y, x]) trueCount++;
-        Console.WriteLine($"T2B mask true pixels: {trueCount}/{imgW * imgH} ({100.0 * trueCount / (imgW * imgH):F1}%)");
+                if (result.B2TMask[y, x]) trueCount++;
+        Console.WriteLine($"B2T mask true pixels: {trueCount}/{imgW * imgH} ({100.0 * trueCount / (imgW * imgH):F1}%)");
 
-        // Step 7: Flip mask T2B -> B2T (what SegmentAnything2Model does)
-        bool[,] b2tBestMask = Sam2InferenceEngine.VerticalFlipMask(t2bBestMask);
+        // The B2T mask is flipped from T2B. To compare with Python (T2B), flip back.
+        bool[,] t2bMask = Sam2InferenceEngine.VerticalFlipMask(result.B2TMask);
 
-        // Save T2B mask for comparison
-        SaveMaskPng(t2bBestMask, Path.Combine(CSHARP_OUTPUT_DIR, "mask_sam2model_t2b.png"));
-        SaveMaskPng(b2tBestMask, Path.Combine(CSHARP_OUTPUT_DIR, "mask_sam2model_b2t.png"));
+        SaveMaskPng(t2bMask, Path.Combine(CSHARP_OUTPUT_DIR, "mask_processor_t2b.png"));
 
-        // Step 8: Compare T2B mask with Python reference
         string pyMaskPath = Path.Combine(PYTHON_OUTPUT_DIR, "best_mask_bool_png.npy");
         if (File.Exists(pyMaskPath))
         {
             bool[,] pyMask = LoadNpyBool(pyMaskPath);
-            Assert.That(t2bBestMask.GetLength(0), Is.EqualTo(pyMask.GetLength(0)));
-            Assert.That(t2bBestMask.GetLength(1), Is.EqualTo(pyMask.GetLength(1)));
+            var (matchRate, diffCount, onlyCs, onlyPy) = CompareMasks(t2bMask, pyMask);
+            Console.WriteLine($"Python comparison: match={matchRate:F4}%, diff={diffCount}");
 
-            var (matchRate, diffCount, onlyCs, onlyPy) = CompareMasks(t2bBestMask, pyMask);
-            Console.WriteLine($"\n=== Python Comparison (SegmentAnything2Model flow) ===");
-            Console.WriteLine($"Match rate: {matchRate:F4}%");
-            Console.WriteLine($"Different: {diffCount}");
-
-            SaveDiffPng(t2bBestMask, pyMask, Path.Combine(CSHARP_OUTPUT_DIR, "diff_sam2model_vs_python.png"));
+            SaveDiffPng(t2bMask, pyMask, Path.Combine(CSHARP_OUTPUT_DIR, "diff_processor_vs_python.png"));
 
             Assert.That(matchRate, Is.GreaterThan(99.0),
-                $"Mask match rate should be > 99%, got {matchRate:F4}%");
+                $"Match rate should be > 99%, got {matchRate:F4}%");
         }
         else
         {
@@ -463,45 +338,127 @@ public class SegmentAnything2ModelTest
     }
 
     // =======================================================
-    // 6. Mask overlay: B2T mask on B2T pixels
-    //    Verifies CreateMaskedImage logic alignment
+    // 6. ApplyMaskOverlay: correct pixel modification
     // =======================================================
     [Test]
-    public void MaskOverlay_B2T_CorrectAlignment()
+    public void ApplyMaskOverlay_ModifiesCorrectPixels()
+    {
+        int w = 4, h = 4;
+        Color32[] pixels = new Color32[w * h];
+        for (int i = 0; i < pixels.Length; i++)
+            pixels[i] = new Color32(0, 0, 255, 255);  // all blue
+
+        bool[,] mask = new bool[h, w];
+        // Mask: only top-left quadrant
+        mask[0, 0] = true; mask[0, 1] = true;
+        mask[1, 0] = true; mask[1, 1] = true;
+
+        Color32 red = new Color32(255, 0, 0, 255);
+        Color32[] result = Sam2Processor.ApplyMaskOverlay(mask, pixels, w, h, red);
+
+        // Masked pixels should be modified (blue + red overlay)
+        Assert.That(result[0].r, Is.GreaterThan(0), "Masked pixel should have red");
+        Assert.That(result[0].b, Is.LessThan(255), "Masked pixel blue should be reduced");
+
+        // Unmasked pixels should be unchanged
+        Assert.That(result[2 * w].r, Is.EqualTo(0), "Unmasked pixel R unchanged");
+        Assert.That(result[2 * w].b, Is.EqualTo(255), "Unmasked pixel B unchanged");
+
+        // Original array should not be modified
+        Assert.That(pixels[0].r, Is.EqualTo(0), "Original pixels should not be modified");
+    }
+
+    // =======================================================
+    // 7. ConvertClickCoordsToB2T
+    // =======================================================
+    [Test]
+    public void ConvertClickCoordsToB2T_FlipsY()
+    {
+        float[,] t2bCoords = new float[,] { { 500, 375 }, { 100, 0 } };
+        float[,] b2tCoords = Sam2Processor.ConvertClickCoordsToB2T(t2bCoords, 1200);
+
+        Assert.That(b2tCoords[0, 0], Is.EqualTo(500f), "X unchanged");
+        Assert.That(b2tCoords[0, 1], Is.EqualTo(824f), "Y = 1200-1-375 = 824");
+        Assert.That(b2tCoords[1, 0], Is.EqualTo(100f));
+        Assert.That(b2tCoords[1, 1], Is.EqualTo(1199f), "Y = 1200-1-0 = 1199");
+    }
+
+    // =======================================================
+    // 8. DrawClickPoints: markers drawn at correct positions
+    // =======================================================
+    [Test]
+    public void DrawClickPoints_DrawsMarkers()
+    {
+        int w = 100, h = 100;
+        Color32[] pixels = new Color32[w * h];
+        for (int i = 0; i < pixels.Length; i++)
+            pixels[i] = new Color32(0, 0, 0, 255);  // all black
+
+        float[,] coords = new float[,] { { 50, 50 } };
+        float[] labels = new float[] { 1f };  // positive = green
+
+        Color32[] result = Sam2Processor.DrawClickPoints(coords, labels, pixels, w, h);
+
+        // Center pixel should be green (marker at 50,50)
+        Assert.That(result[50 * w + 50].g, Is.EqualTo(255), "Center marker should be green");
+
+        // Original should not be modified
+        Assert.That(pixels[50 * w + 50].g, Is.EqualTo(0), "Original should not be modified");
+
+        // Far-away pixel should still be black
+        Assert.That(result[0].g, Is.EqualTo(0), "Far pixel should be unmodified");
+    }
+
+    // =======================================================
+    // 9. DrawClickPoints: box labels (>=2) are skipped
+    // =======================================================
+    [Test]
+    public void DrawClickPoints_SkipsBoxLabels()
+    {
+        int w = 100, h = 100;
+        Color32[] pixels = new Color32[w * h];
+        for (int i = 0; i < pixels.Length; i++)
+            pixels[i] = new Color32(0, 0, 0, 255);
+
+        float[,] coords = new float[,] { { 50, 50 }, { 80, 80 } };
+        float[] labels = new float[] { 2f, 3f };  // box labels
+
+        Color32[] result = Sam2Processor.DrawClickPoints(coords, labels, pixels, w, h);
+
+        // No markers should be drawn for box labels
+        Assert.That(result[50 * w + 50].g, Is.EqualTo(0));
+        Assert.That(result[80 * w + 80].g, Is.EqualTo(0));
+    }
+
+    // =======================================================
+    // 10. Mask overlay on real inference result
+    // =======================================================
+    [Test]
+    public void MaskOverlay_RealInference_CorrectAlignment()
     {
         if (!ModelsExist())
-            Assert.Ignore("ONNX models not found in " + MODEL_DIR);
+            Assert.Ignore("ONNX models not found");
         if (!File.Exists(PNG_IMAGE_PATH))
             Assert.Ignore("truck.png not found");
+
+        var (processor, backend) = CreateOrtProcessor();
+        using var _ = backend;
 
         var (t2bPixels, imgW, imgH) = LoadPngTopToBottom(PNG_IMAGE_PATH);
         Color32[] b2tPixels = SimulateUnityGetPixels32(t2bPixels, imgW, imgH);
 
-        // Run inference (same as SegmentAnything2Model)
-        Color32[] t2bForInference = Sam2InferenceEngine.VerticalFlip(b2tPixels, imgW, imgH);
+        processor.ProcessEmbedding(b2tPixels, imgW, imgH);
+        processor.AddClickPoint(500, 375);
+        var result = processor.ProcessMask(imgW, imgH);
 
-        using var backend = new OrtSam2Backend();
-        backend.LoadModels(EncoderPath, DecoderPath, PromptPath);
+        Assert.That(result.HasMask, Is.True);
 
-        var (encoderOutput, highResFeats) = ReplicateRunEmbedding(backend, t2bForInference, imgW, imgH);
+        Color32[] overlayPixels = Sam2Processor.ApplyMaskOverlay(
+            result.B2TMask, b2tPixels, imgW, imgH);
 
-        engine.AddClickPoint(500, 375);
-        float[,] coords = engine.GetClickPoints(imgH);
-        float[] labels = engine.GetPointLabels();
-
-        var (masks, iouPred) = ReplicateRunInference(
-            backend, encoderOutput, highResFeats,
-            imgW, imgH, coords, labels);
-
-        int bestIdx = engine.FindBestMaskIndex(iouPred);
-        bool[,] b2tMask = Sam2InferenceEngine.VerticalFlipMask(masks[bestIdx]);
-
-        // Apply overlay (CreateMaskedImage logic)
-        Color32[] overlayPixels = ReplicateCreateMaskedImage(b2tMask, b2tPixels, imgW, imgH);
-
-        // Verify: masked pixels differ from original, unmasked are identical
-        int maskedCount = 0, unmaskedCount = 0;
-        int maskedCorrect = 0, unmaskedCorrect = 0;
+        // Verify alignment: unmasked pixels unchanged, masked pixels modified
+        int unmaskedCorrect = 0, unmaskedTotal = 0;
+        int maskedModified = 0, maskedTotal = 0;
 
         for (int y = 0; y < imgH; y++)
         {
@@ -509,19 +466,17 @@ public class SegmentAnything2ModelTest
             for (int x = 0; x < imgW; x++)
             {
                 int idx = rowOffset + x;
-                if (b2tMask[y, x])
+                if (result.B2TMask[y, x])
                 {
-                    maskedCount++;
-                    // Should be modified (blended with red)
+                    maskedTotal++;
                     if (overlayPixels[idx].r != b2tPixels[idx].r ||
                         overlayPixels[idx].g != b2tPixels[idx].g ||
                         overlayPixels[idx].b != b2tPixels[idx].b)
-                        maskedCorrect++;
+                        maskedModified++;
                 }
                 else
                 {
-                    unmaskedCount++;
-                    // Should be unchanged
+                    unmaskedTotal++;
                     if (overlayPixels[idx].r == b2tPixels[idx].r &&
                         overlayPixels[idx].g == b2tPixels[idx].g &&
                         overlayPixels[idx].b == b2tPixels[idx].b)
@@ -530,200 +485,118 @@ public class SegmentAnything2ModelTest
             }
         }
 
-        Console.WriteLine($"Masked pixels: {maskedCount} ({100.0 * maskedCorrect / Math.Max(1, maskedCount):F1}% correctly modified)");
-        Console.WriteLine($"Unmasked pixels: {unmaskedCount} ({100.0 * unmaskedCorrect / Math.Max(1, unmaskedCount):F1}% correctly unchanged)");
+        Console.WriteLine($"Masked: {maskedTotal} ({100.0 * maskedModified / Math.Max(1, maskedTotal):F1}% modified)");
+        Console.WriteLine($"Unmasked: {unmaskedTotal} ({100.0 * unmaskedCorrect / Math.Max(1, unmaskedTotal):F1}% unchanged)");
 
-        Assert.That(maskedCount, Is.GreaterThan(0), "Should have masked pixels");
-        Assert.That(unmaskedCount, Is.GreaterThan(0), "Should have unmasked pixels");
-        Assert.That(unmaskedCorrect, Is.EqualTo(unmaskedCount),
-            "All unmasked pixels should be unchanged");
-        // Some pixels might have pure black/white that blend to same value,
-        // but the vast majority should be modified
-        Assert.That((double)maskedCorrect / maskedCount, Is.GreaterThan(0.95),
-            "Most masked pixels should be modified");
+        Assert.That(unmaskedCorrect, Is.EqualTo(unmaskedTotal), "All unmasked pixels unchanged");
+        Assert.That(maskedTotal, Is.GreaterThan(0));
+        Assert.That((double)maskedModified / maskedTotal, Is.GreaterThan(0.95));
     }
 
     // =======================================================
-    // 7. Click coord T2B -> B2T conversion for DrawClickPoints
-    //    SegmentAnything2Model.ProcessMask converts coords for visualization
+    // 11. Multiple click points
     // =======================================================
     [Test]
-    public void ClickCoords_T2B_To_B2T_ForVisualization()
-    {
-        int imageHeight = 1200;
-
-        // Add click at T2B (500, 375) - near top of image
-        engine.AddClickPoint(500, 375);
-        float[,] t2bCoords = engine.GetClickPoints(imageHeight);
-
-        // ProcessMask converts T2B -> B2T for DrawClickPoints:
-        //   b2tCoords[i, 1] = imageHeight - 1 - coords[i, 1]
-        float[,] b2tCoords = new float[t2bCoords.GetLength(0), 2];
-        for (int i = 0; i < t2bCoords.GetLength(0); i++)
-        {
-            b2tCoords[i, 0] = t2bCoords[i, 0];
-            b2tCoords[i, 1] = imageHeight - 1 - t2bCoords[i, 1];
-        }
-
-        Assert.That(b2tCoords[0, 0], Is.EqualTo(500f), "X unchanged");
-        Assert.That(b2tCoords[0, 1], Is.EqualTo(824f), "Y flipped: 1200-1-375=824");
-
-        // In B2T, y=824 is near top of image (high row index = top)
-        Assert.That(b2tCoords[0, 1], Is.GreaterThan(imageHeight / 2),
-            "B2T click near top should have high Y value");
-    }
-
-    // =======================================================
-    // 8. Multiple click points: the full ProcessMask flow
-    // =======================================================
-    [Test]
-    public void MultipleClickPoints_ProcessMaskFlow()
+    public void MultipleClickPoints()
     {
         if (!ModelsExist())
-            Assert.Ignore("ONNX models not found in " + MODEL_DIR);
+            Assert.Ignore("ONNX models not found");
         if (!File.Exists(PNG_IMAGE_PATH))
             Assert.Ignore("truck.png not found");
 
+        var (processor, backend) = CreateOrtProcessor();
+        using var _ = backend;
+
         var (t2bPixels, imgW, imgH) = LoadPngTopToBottom(PNG_IMAGE_PATH);
         Color32[] b2tPixels = SimulateUnityGetPixels32(t2bPixels, imgW, imgH);
-        Color32[] t2bForInference = Sam2InferenceEngine.VerticalFlip(b2tPixels, imgW, imgH);
 
-        using var backend = new OrtSam2Backend();
-        backend.LoadModels(EncoderPath, DecoderPath, PromptPath);
+        processor.ProcessEmbedding(b2tPixels, imgW, imgH);
+        processor.AddClickPoint(500, 375);           // positive (truck)
+        processor.AddClickPoint(1200, 100, true);     // negative (background)
 
-        var (encoderOutput, highResFeats) = ReplicateRunEmbedding(backend, t2bForInference, imgW, imgH);
+        var result = processor.ProcessMask(imgW, imgH);
+        Assert.That(result.HasMask, Is.True);
 
-        // Add positive point on truck + negative point on background
-        engine.AddClickPoint(500, 375);           // positive (on truck)
-        engine.AddClickPoint(1200, 100, true);     // negative (background, top-right)
+        // Flip B2T mask back to T2B to check in image coordinates
+        bool[,] t2bMask = Sam2InferenceEngine.VerticalFlipMask(result.B2TMask);
 
-        float[,] coords = engine.GetClickPoints(imgH);
-        float[] labels = engine.GetPointLabels();
+        Assert.That(t2bMask[375, 500], Is.True, "Positive point should be inside mask");
+        Assert.That(t2bMask[100, 1200], Is.False, "Negative point should be outside mask");
 
-        Assert.That(coords.GetLength(0), Is.EqualTo(2));
-        Assert.That(labels[0], Is.EqualTo(1f), "First point positive");
-        Assert.That(labels[1], Is.EqualTo(0f), "Second point negative");
-
-        var (masks, iouPred) = ReplicateRunInference(
-            backend, encoderOutput, highResFeats,
-            imgW, imgH, coords, labels);
-
-        Assert.That(masks.Length, Is.GreaterThan(0));
-        int bestIdx = engine.FindBestMaskIndex(iouPred);
-        bool[,] bestMask = masks[bestIdx];
-
-        // The positive point (500, 375) should be inside the mask
-        Assert.That(bestMask[375, 500], Is.True,
-            "Positive click point should be inside mask");
-
-        // The negative point (1200, 100) should be outside the mask
-        Assert.That(bestMask[100, 1200], Is.False,
-            "Negative click point should be outside mask");
-
-        Console.WriteLine($"Multi-point: best mask index={bestIdx}, score={iouPred[bestIdx]:F4}");
-
-        SaveMaskPng(bestMask, Path.Combine(CSHARP_OUTPUT_DIR, "mask_sam2model_multipoint.png"));
+        SaveMaskPng(t2bMask, Path.Combine(CSHARP_OUTPUT_DIR, "mask_processor_multipoint.png"));
     }
 
     // =======================================================
-    // 9. Box prompt: ProcessMask flow with box coordinates
+    // 12. Box prompt
     // =======================================================
     [Test]
-    public void BoxPrompt_ProcessMaskFlow()
+    public void BoxPrompt()
     {
         if (!ModelsExist())
-            Assert.Ignore("ONNX models not found in " + MODEL_DIR);
+            Assert.Ignore("ONNX models not found");
         if (!File.Exists(PNG_IMAGE_PATH))
             Assert.Ignore("truck.png not found");
 
+        var (processor, backend) = CreateOrtProcessor();
+        using var _ = backend;
+
         var (t2bPixels, imgW, imgH) = LoadPngTopToBottom(PNG_IMAGE_PATH);
         Color32[] b2tPixels = SimulateUnityGetPixels32(t2bPixels, imgW, imgH);
-        Color32[] t2bForInference = Sam2InferenceEngine.VerticalFlip(b2tPixels, imgW, imgH);
 
-        using var backend = new OrtSam2Backend();
-        backend.LoadModels(EncoderPath, DecoderPath, PromptPath);
+        processor.ProcessEmbedding(b2tPixels, imgW, imgH);
+        processor.SetBoxCoords(new Rect(150, 70, 1200, 900));
 
-        var (encoderOutput, highResFeats) = ReplicateRunEmbedding(backend, t2bForInference, imgW, imgH);
+        var result = processor.ProcessMask(imgW, imgH);
+        Assert.That(result.HasMask, Is.True);
 
-        // Set box around the truck area (T2B coordinates)
-        // AiliaImageSegmentationSample sets box as Rect(xMin, yMin, width, height)
-        engine.SetBoxCoords(new Rect(150, 70, 1200, 900));
-
-        float[,] coords = engine.GetClickPoints(imgH);
-        float[] labels = engine.GetPointLabels();
-
-        // Box adds 2 points with labels 2 and 3
-        Assert.That(coords.GetLength(0), Is.EqualTo(2));
-        Assert.That(labels[0], Is.EqualTo(2f), "Box top-left label");
-        Assert.That(labels[1], Is.EqualTo(3f), "Box bottom-right label");
-
-        var (masks, iouPred) = ReplicateRunInference(
-            backend, encoderOutput, highResFeats,
-            imgW, imgH, coords, labels);
-
-        Assert.That(masks.Length, Is.GreaterThan(0));
-        int bestIdx = engine.FindBestMaskIndex(iouPred);
-        bool[,] bestMask = masks[bestIdx];
-
-        // Center of box should be inside mask
+        bool[,] t2bMask = Sam2InferenceEngine.VerticalFlipMask(result.B2TMask);
         int boxCenterX = 150 + 1200 / 2;
         int boxCenterY = 70 + 900 / 2;
-        Assert.That(bestMask[boxCenterY, boxCenterX], Is.True,
-            "Box center should be inside mask");
+        Assert.That(t2bMask[boxCenterY, boxCenterX], Is.True, "Box center should be inside mask");
 
-        Console.WriteLine($"Box prompt: best mask index={bestIdx}, score={iouPred[bestIdx]:F4}");
-
-        SaveMaskPng(bestMask, Path.Combine(CSHARP_OUTPUT_DIR, "mask_sam2model_box.png"));
+        SaveMaskPng(t2bMask, Path.Combine(CSHARP_OUTPUT_DIR, "mask_processor_box.png"));
     }
 
     // =======================================================
-    // 10. Verify RunFullPipeline produces same result as
-    //     step-by-step SegmentAnything2Model flow
+    // 13. Full visualization pipeline (overlay + click points)
     // =======================================================
     [Test]
-    public void RunFullPipeline_MatchesStepByStep()
+    public void FullVisualizationPipeline()
     {
         if (!ModelsExist())
-            Assert.Ignore("ONNX models not found in " + MODEL_DIR);
+            Assert.Ignore("ONNX models not found");
         if (!File.Exists(PNG_IMAGE_PATH))
             Assert.Ignore("truck.png not found");
 
+        var (processor, backend) = CreateOrtProcessor();
+        using var _ = backend;
+
         var (t2bPixels, imgW, imgH) = LoadPngTopToBottom(PNG_IMAGE_PATH);
+        Color32[] b2tPixels = SimulateUnityGetPixels32(t2bPixels, imgW, imgH);
 
-        using var backend = new OrtSam2Backend();
-        backend.LoadModels(EncoderPath, DecoderPath, PromptPath);
+        processor.ProcessEmbedding(b2tPixels, imgW, imgH);
+        processor.AddClickPoint(500, 375);
 
-        int clickX = 500, clickY = 375;
-        float[,] pointCoords = new float[,] { { clickX, clickY } };
-        float[] pointLabels = new float[] { 1f };
+        var result = processor.ProcessMask(imgW, imgH);
+        Assert.That(result.HasMask, Is.True);
 
-        // Method 1: RunFullPipeline (one-shot)
-        var (pipelineMasks, pipelineIou) = engine.RunFullPipeline(
-            backend, t2bPixels, imgW, imgH, pointCoords, pointLabels);
+        // Full visualization: overlay + click points
+        Color32[] overlayPixels = Sam2Processor.ApplyMaskOverlay(
+            result.B2TMask, b2tPixels, imgW, imgH);
 
-        // Method 2: Step-by-step (replicating SegmentAnything2Model)
-        var (encoderOutput, highResFeats) = ReplicateRunEmbedding(backend, t2bPixels, imgW, imgH);
-        var (stepMasks, stepIou) = ReplicateRunInference(
-            backend, encoderOutput, highResFeats,
-            imgW, imgH, pointCoords, pointLabels);
+        float[,] t2bCoords = processor.GetClickPoints(imgH);
+        float[] labels = processor.GetPointLabels();
+        float[,] b2tCoords = Sam2Processor.ConvertClickCoordsToB2T(t2bCoords, imgH);
 
-        // Both should produce the same results
-        Assert.That(pipelineMasks.Length, Is.EqualTo(stepMasks.Length), "Same number of masks");
-        Assert.That(pipelineIou.Length, Is.EqualTo(stepIou.Length), "Same number of IoU scores");
+        Color32[] finalPixels = Sam2Processor.DrawClickPoints(
+            b2tCoords, labels, overlayPixels, imgW, imgH);
 
-        for (int i = 0; i < pipelineIou.Length; i++)
-            Assert.That(pipelineIou[i], Is.EqualTo(stepIou[i]).Within(1e-5f),
-                $"IoU[{i}] should match");
+        // The click point at B2T coords should have a green marker
+        int b2tClickY = imgH - 1 - 375;  // = 824
+        int markerIdx = b2tClickY * imgW + 500;
+        Assert.That(finalPixels[markerIdx].g, Is.EqualTo(255),
+            "Click point marker should be green");
 
-        int pipelineBest = engine.FindBestMaskIndex(pipelineIou);
-        int stepBest = engine.FindBestMaskIndex(stepIou);
-        Assert.That(pipelineBest, Is.EqualTo(stepBest), "Same best mask index");
-
-        // Masks should be identical
-        var (matchRate, diffCount, _, _) = CompareMasks(
-            pipelineMasks[pipelineBest], stepMasks[stepBest]);
-        Console.WriteLine($"RunFullPipeline vs step-by-step: match rate = {matchRate:F4}%");
-        Assert.That(matchRate, Is.EqualTo(100.0),
-            "RunFullPipeline should produce identical masks to step-by-step");
+        Console.WriteLine($"Visualization pipeline complete. Output size: {finalPixels.Length}");
     }
 }

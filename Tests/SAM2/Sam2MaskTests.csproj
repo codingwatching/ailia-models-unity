@@ -28,6 +28,7 @@
   <ItemGroup>
     <Compile Include="../../Assets/AXIP/AILIA-MODELS/ImageSegmentation/Sam2InferenceEngine.cs" Link="Shared/Sam2InferenceEngine.cs" />
     <Compile Include="../../Assets/AXIP/AILIA-MODELS/ImageSegmentation/AiliaSam2Backend.cs" Link="Shared/AiliaSam2Backend.cs" />
+    <Compile Include="../../Assets/AXIP/AILIA-MODELS/ImageSegmentation/Sam2Processor.cs" Link="Shared/Sam2Processor.cs" />
   </ItemGroup>
 
   <!-- ailia SDK wrapper files (from ailia-csharp repo) -->

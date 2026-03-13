@@ -20,6 +20,17 @@ public class AiliaSam2Backend : ISam2Backend
     private ailia.AiliaModel encoder;
     private ailia.AiliaModel decoder;
     private ailia.AiliaModel prompt;
+    private bool gpuMode = false;
+
+    public void SetGpuMode()
+    {
+        gpuMode = true;
+    }
+
+    public string EnvironmentName()
+    {
+        return encoder?.EnvironmentName() ?? "";
+    }
 
     public void LoadModels(string encoderPath, string decoderPath, string promptEncoderPath)
     {
@@ -27,11 +38,18 @@ public class AiliaSam2Backend : ISam2Backend
         decoder = new ailia.AiliaModel();
         prompt = new ailia.AiliaModel();
 
-        // Use reduced memory mode (same as SegmentAnything2Model.cs)
+        // Use reduced memory mode
         uint memoryMode = ailia.Ailia.AILIA_MEMORY_REDUCE_INTERSTAGE;
         encoder.SetMemoryMode(memoryMode);
         decoder.SetMemoryMode(memoryMode);
         prompt.SetMemoryMode(memoryMode);
+
+        if (gpuMode)
+        {
+            encoder.Environment(ailia.Ailia.AILIA_ENVIRONMENT_TYPE_GPU);
+            decoder.Environment(ailia.Ailia.AILIA_ENVIRONMENT_TYPE_GPU);
+            prompt.Environment(ailia.Ailia.AILIA_ENVIRONMENT_TYPE_GPU);
+        }
 
         // Use prototxt files alongside ONNX files
         string encoderProto = encoderPath + ".prototxt";
