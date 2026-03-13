@@ -6,13 +6,11 @@ using System.Linq;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
 
-namespace Sam2MaskTests
+/// <summary>
+/// SAM2 inference backend using Microsoft.ML.OnnxRuntime.
+/// </summary>
+public class OrtSam2Backend : ISam2Backend
 {
-    /// <summary>
-    /// SAM2 inference backend using Microsoft.ML.OnnxRuntime.
-    /// </summary>
-    public class OrtSam2Backend : ISam2Backend
-    {
         private InferenceSession? encoderSession;
         private InferenceSession? decoderSession;
         private InferenceSession? promptSession;
@@ -129,5 +127,4 @@ namespace Sam2MaskTests
             decoderSession?.Dispose();
             promptSession?.Dispose();
         }
-    }
 }

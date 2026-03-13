@@ -14,7 +14,6 @@
  */
 
 using NUnit.Framework;
-using Sam2MaskTests;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
 using SixLabors.ImageSharp;
@@ -22,11 +21,12 @@ using SixLabors.ImageSharp.PixelFormats;
 using System;
 using System.IO;
 using System.Linq;
+using UnityEngine;
 
 [TestFixture]
 public class Sam2OnnxInferenceTest
 {
-    private Sam2ImageMaskLogic logic = null!;
+    private Sam2InferenceEngine logic = null!;
 
     private const string MODEL_DIR = "/tmp/sam2_models";
     private const string PNG_IMAGE_PATH = "/tmp/sam2_test_output/truck.png";
@@ -45,7 +45,7 @@ public class Sam2OnnxInferenceTest
     [SetUp]
     public void SetUp()
     {
-        logic = new Sam2ImageMaskLogic();
+        logic = new Sam2InferenceEngine();
         Directory.CreateDirectory(CSHARP_OUTPUT_DIR);
     }
 

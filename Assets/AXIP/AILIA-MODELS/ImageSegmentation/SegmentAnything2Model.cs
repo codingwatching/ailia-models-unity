@@ -1,5 +1,10 @@
 /* AILIA Unity Plugin Segment Anything Sample */
 /* Copyright 2025 AXELL CORPORATION and ax Inc. */
+/*
+ * Unity wrapper for SAM2 image segmentation.
+ * Delegates all computational logic to Sam2InferenceEngine (shared with tests).
+ * Keeps only Unity-specific code: model initialization, visualization, async control.
+ */
 
 using ailia;
 using ailiaSDK;
@@ -24,10 +29,6 @@ public class SegmentAnything2Model
     private const string promptWeightPath = "prompt_encoder_hiera_l.onnx";
     private const string promptProtoPath = "prompt_encoder_hiera_l.onnx.prototxt";
 
-    private List<Vector2Int> clickPoints = new();
-    private List<Boolean> clickPointLabels = new();
-    private Rect boxCoords = new();
-    private bool addBoxCoords => boxCoords.width > 0 && boxCoords.height > 0;
     private int targetSize = 1024;
     private ailia.AiliaModel encoder;
     private ailia.AiliaModel decoder;
@@ -42,10 +43,6 @@ public class SegmentAnything2Model
     private bool gpuMode = false;
     private bool showClickPoints = true;
 
-    // Normalization constants (ImageNet)
-    private readonly float[] Mean = { 0.485f, 0.456f, 0.406f };
-    private readonly float[] Std = { 0.229f, 0.224f, 0.225f };
-
     // For async cancellation
     private CancellationTokenSource cancellationTokenSource;
     private bool isQuitting = false;
@@ -56,27 +53,24 @@ public class SegmentAnything2Model
     private bool saveFrame = false;
     private float[] encoderOutput = null;
     private float[][] highResFeats = null;
-    private BackboneOutputs backboneData;
     private System.Random _rng = new System.Random();
+
+    // Shared inference engine (all computational logic)
+    private readonly Sam2InferenceEngine engine = new Sam2InferenceEngine();
 
     public void SetBoxCoords(Rect box)
     {
-        boxCoords = box;
-
-        // Debug.Log($"boxCoords set to {box.xMin},{box.yMin} {box.xMax},{box.yMax}");
+        engine.SetBoxCoords(box);
     }
 
     public void AddClickPoint(int x, int y, bool negativePoint = false)
     {
-        clickPoints.Add(new Vector2Int(x, y));
-        clickPointLabels.Add(!negativePoint);
+        engine.AddClickPoint(x, y, negativePoint);
     }
 
     public void ResetClickPoint()
     {
-        clickPoints = new();
-        clickPointLabels = new();
-        boxCoords = new();
+        engine.ResetClickPoint();
     }
 
     public List<ModelDownloadURL> GetModelURLs(ImageSegmentaionModels modelType)
@@ -186,44 +180,12 @@ public class SegmentAnything2Model
 
     public float[,] GetClickPoints(int imageHeight)
     {
-        float[,] points = new float[clickPoints.Count + (addBoxCoords ? 2 : 0), 2];
-        int i = 0;
-
-        foreach (var point in clickPoints)
-        {
-            points[i, 0] = point.x;
-            points[i, 1] = point.y;
-
-            i += 1;
-        }
-
-        if (addBoxCoords)
-        {
-            points[clickPoints.Count, 0] = boxCoords.xMin;
-            points[clickPoints.Count, 1] = boxCoords.yMin;
-            points[clickPoints.Count + 1, 0] = boxCoords.xMax;
-            points[clickPoints.Count + 1, 1] = boxCoords.yMax;
-        }
-
-        return points;
+        return engine.GetClickPoints(imageHeight);
     }
 
     private float[] GetPointLabels()
     {
-        float[] labels = new float[clickPoints.Count + (addBoxCoords ? 2 : 0)];
-
-        for (int i = 0; i < clickPoints.Count; ++i)
-        {
-            labels[i] = (clickPointLabels[i] ? 1f : 0f);
-        }
-
-        if (addBoxCoords)
-        {
-            labels[clickPoints.Count] = 2;
-            labels[clickPoints.Count + 1] = 3;
-        }
-
-        return labels;
+        return engine.GetPointLabels();
     }
 
     // Run Embedding
@@ -234,8 +196,8 @@ public class SegmentAnything2Model
             return;
         }
 
-        float[,,,] inputTensor = PreprocessImage(image, imgWidth, imgHeight, targetSize);
-        float[] nchwInput = Flatten4D(inputTensor);
+        float[,,,] inputTensor = engine.PreprocessImage(image, imgWidth, imgHeight, targetSize);
+        float[] nchwInput = engine.Flatten4D(inputTensor);
 
         try
         {
@@ -262,7 +224,6 @@ public class SegmentAnything2Model
             }
 
             bool dataSetResult = encoder.SetInputBlobData(nchwInput, imgIndex);
-            // Debug.Log($"updated SET DATA {dataSetResult}");
 
             bool encResult = encoder.Update();
 
@@ -304,469 +265,44 @@ public class SegmentAnything2Model
                 return;
             }
 
-            ailia.Ailia.AILIAShape visionFeaturesBlobShape = encoder.GetBlobShape(
-                (uint)visionFeaturesBlobIndex
-            );
-
-            float[] visionFeaturesOutput = new float[
-                visionFeaturesBlobShape.w
-                    * visionFeaturesBlobShape.z
-                    * visionFeaturesBlobShape.y
-                    * visionFeaturesBlobShape.x
-            ];
-
-            ailia.Ailia.AILIAShape visionPosEnc0BlobShape = encoder.GetBlobShape(
-                (uint)visionPosEnc0BlobIndex
-            );
-
-            float[] visionPosEnc0Output = new float[
-                visionPosEnc0BlobShape.w
-                    * visionPosEnc0BlobShape.z
-                    * visionPosEnc0BlobShape.y
-                    * visionPosEnc0BlobShape.x
-            ];
-
-            ailia.Ailia.AILIAShape visionPosEnc1BlobShape = encoder.GetBlobShape(
-                (uint)visionPosEnc1BlobIndex
-            );
-
-            float[] visionPosEnc1Output = new float[
-                visionPosEnc1BlobShape.w
-                    * visionPosEnc1BlobShape.z
-                    * visionPosEnc1BlobShape.y
-                    * visionPosEnc1BlobShape.x
-            ];
-
-            ailia.Ailia.AILIAShape visionPosEnc2BlobShape = encoder.GetBlobShape(
-                (uint)visionPosEnc2BlobIndex
-            );
-
-            float[] visionPosEnc2Output = new float[
-                visionPosEnc2BlobShape.w
-                    * visionPosEnc2BlobShape.z
-                    * visionPosEnc2BlobShape.y
-                    * visionPosEnc2BlobShape.x
-            ];
-
-            ailia.Ailia.AILIAShape backboneFpn0BlobShape = encoder.GetBlobShape(
-                (uint)backboneFpn0BlobIndex
-            );
-
-            float[] backboneFpn0Output = new float[
-                backboneFpn0BlobShape.w
-                    * backboneFpn0BlobShape.z
-                    * backboneFpn0BlobShape.y
-                    * backboneFpn0BlobShape.x
-            ];
-
-            ailia.Ailia.AILIAShape backboneFpn1BlobShape = encoder.GetBlobShape(
-                (uint)backboneFpn1BlobIndex
-            );
-
-            float[] backboneFpn1Output = new float[
-                backboneFpn1BlobShape.w
-                    * backboneFpn1BlobShape.z
-                    * backboneFpn1BlobShape.y
-                    * backboneFpn1BlobShape.x
-            ];
-
-            ailia.Ailia.AILIAShape backboneFpn2BlobShape = encoder.GetBlobShape(
-                (uint)backboneFpn2BlobIndex
-            );
-
-            float[] backboneFpn2Output = new float[
-                backboneFpn2BlobShape.w
-                    * backboneFpn2BlobShape.z
-                    * backboneFpn2BlobShape.y
-                    * backboneFpn2BlobShape.x
-            ];
-
+            // Read encoder outputs and build EncoderOutput struct for shared engine
+            ailia.Ailia.AILIAShape vfShape = encoder.GetBlobShape((uint)visionFeaturesBlobIndex);
+            float[] visionFeaturesOutput = new float[vfShape.w * vfShape.z * vfShape.y * vfShape.x];
             encoder.GetBlobData(visionFeaturesOutput, visionFeaturesBlobIndex);
-            encoder.GetBlobData(visionPosEnc0Output, visionPosEnc0BlobIndex);
-            encoder.GetBlobData(visionPosEnc1Output, visionPosEnc1BlobIndex);
-            encoder.GetBlobData(visionPosEnc2Output, visionPosEnc2BlobIndex);
+
+            ailia.Ailia.AILIAShape fp0Shape = encoder.GetBlobShape((uint)backboneFpn0BlobIndex);
+            float[] backboneFpn0Output = new float[fp0Shape.w * fp0Shape.z * fp0Shape.y * fp0Shape.x];
             encoder.GetBlobData(backboneFpn0Output, backboneFpn0BlobIndex);
+
+            ailia.Ailia.AILIAShape fp1Shape = encoder.GetBlobShape((uint)backboneFpn1BlobIndex);
+            float[] backboneFpn1Output = new float[fp1Shape.w * fp1Shape.z * fp1Shape.y * fp1Shape.x];
             encoder.GetBlobData(backboneFpn1Output, backboneFpn1BlobIndex);
+
+            ailia.Ailia.AILIAShape fp2Shape = encoder.GetBlobShape((uint)backboneFpn2BlobIndex);
+            float[] backboneFpn2Output = new float[fp2Shape.w * fp2Shape.z * fp2Shape.y * fp2Shape.x];
             encoder.GetBlobData(backboneFpn2Output, backboneFpn2BlobIndex);
 
-            float[][,,,] visionPosEnc = new float[][,,,]
+            // Use shared engine to prepare features
+            var encOut = new EncoderOutput
             {
-                ReshapeTo4D(
-                    visionPosEnc0Output,
-                    (int)visionPosEnc0BlobShape.w,
-                    (int)visionPosEnc0BlobShape.z,
-                    (int)visionPosEnc0BlobShape.y,
-                    (int)visionPosEnc0BlobShape.x
-                ),
-                ReshapeTo4D(
-                    visionPosEnc1Output,
-                    (int)visionPosEnc1BlobShape.w,
-                    (int)visionPosEnc1BlobShape.z,
-                    (int)visionPosEnc1BlobShape.y,
-                    (int)visionPosEnc1BlobShape.x
-                ),
-                ReshapeTo4D(
-                    visionPosEnc2Output,
-                    (int)visionPosEnc2BlobShape.w,
-                    (int)visionPosEnc2BlobShape.z,
-                    (int)visionPosEnc2BlobShape.y,
-                    (int)visionPosEnc2BlobShape.x
-                ),
+                VisionFeatures = visionFeaturesOutput,
+                VisionFeaturesShape = new TensorShape4D((int)vfShape.w, (int)vfShape.z, (int)vfShape.y, (int)vfShape.x),
+                BackboneFpn0 = backboneFpn0Output,
+                Fpn0Shape = new TensorShape4D((int)fp0Shape.w, (int)fp0Shape.z, (int)fp0Shape.y, (int)fp0Shape.x),
+                BackboneFpn1 = backboneFpn1Output,
+                Fpn1Shape = new TensorShape4D((int)fp1Shape.w, (int)fp1Shape.z, (int)fp1Shape.y, (int)fp1Shape.x),
+                BackboneFpn2 = backboneFpn2Output,
+                Fpn2Shape = new TensorShape4D((int)fp2Shape.w, (int)fp2Shape.z, (int)fp2Shape.y, (int)fp2Shape.x),
             };
 
-            float[][,,,] backboneFpn = new float[][,,,]
-            {
-                ReshapeTo4D(
-                    backboneFpn0Output,
-                    (int)backboneFpn0BlobShape.w,
-                    (int)backboneFpn0BlobShape.z,
-                    (int)backboneFpn0BlobShape.y,
-                    (int)backboneFpn0BlobShape.x
-                ),
-                ReshapeTo4D(
-                    backboneFpn1Output,
-                    (int)backboneFpn1BlobShape.w,
-                    (int)backboneFpn1BlobShape.z,
-                    (int)backboneFpn1BlobShape.y,
-                    (int)backboneFpn1BlobShape.x
-                ),
-                ReshapeTo4D(
-                    backboneFpn2Output,
-                    (int)backboneFpn2BlobShape.w,
-                    (int)backboneFpn2BlobShape.z,
-                    (int)backboneFpn2BlobShape.y,
-                    (int)backboneFpn2BlobShape.x
-                )
-            };
-
-            backboneData.visionFeatures = ReshapeTo4D(
-                visionFeaturesOutput,
-                (int)visionFeaturesBlobShape.w,
-                (int)visionFeaturesBlobShape.z,
-                (int)visionFeaturesBlobShape.y,
-                (int)visionFeaturesBlobShape.x
-            );
-            backboneData.visionPosEnc = visionPosEnc;
-            backboneData.backboneFpn = backboneFpn;
-
-            float[][,,] visionFeats = PrepareBackboneFeatures(backboneData);
-
-            // Note: no_mem_embed is NOT added for single-image inference.
-            // In Python SAM2ImagePredictor, no_mem_embed is only used in video tracking mode.
-
-            (int height, int width)[] bbFeatSizes = new (int, int)[]
-            {
-                (256, 256),
-                (128, 128),
-                (64, 64)
-            };
-
-            float[][,,,] featsArray = new float[visionFeats.Length][,,,];
-            for (int i = 0; i < visionFeats.Length; i++)
-            {
-                int revIndex = visionFeats.Length - 1 - i;
-                float[,,] feat = visionFeats[revIndex]; // shape: (HW, 1, C)
-                (int H, int W) = bbFeatSizes[revIndex]; // H, W
-
-                int HW = feat.GetLength(0);
-                int one = feat.GetLength(1);
-                int C = feat.GetLength(2);
-
-                if (HW != H * W)
-                    throw new InvalidOperationException($"Expected HW={H * W}, but got {HW}");
-
-                // Transpose to (1, C, HW)
-                float[,,] transposed = new float[1, C, HW];
-                for (int hw = 0; hw < HW; hw++)
-                {
-                    for (int c = 0; c < C; c++)
-                    {
-                        transposed[0, c, hw] = feat[hw, 0, c];
-                    }
-                }
-
-                // Reshape (1, C, HW) → (1, C, H, W)
-                float[,,,] reshaped = new float[1, C, H, W];
-                for (int hw = 0; hw < HW; hw++)
-                {
-                    int h = hw / W;
-                    int w = hw % W;
-                    for (int c = 0; c < C; c++)
-                    {
-                        reshaped[0, c, h, w] = transposed[0, c, hw];
-                    }
-                }
-
-                featsArray[i] = reshaped;
-            }
-
-            Array.Reverse(featsArray);
-
-            float[,,,] lastFeatElement = featsArray[featsArray.Length - 1];
-
-            float[][,,,] allButLast = featsArray.Take(featsArray.Length - 1).ToArray();
-
-            encoderOutput = new float[
-                visionFeaturesBlobShape.w
-                    * visionFeaturesBlobShape.z
-                    * visionFeaturesBlobShape.y
-                    * visionFeaturesBlobShape.x
-            ];
-
-            encoderOutput = Flatten4D(lastFeatElement);
-            highResFeats = new float[featsArray.Length - 1][];
-            for (int i = 0; i < allButLast.Length; i++)
-            {
-                highResFeats[i] = Flatten4D(allButLast[i]);
-            }
+            var (imageEmbFlat, highResFeatsResult) = engine.PrepareEncoderFeatures(encOut);
+            encoderOutput = imageEmbFlat;
+            highResFeats = highResFeatsResult;
         }
         catch (Exception e)
         {
             Debug.LogError("Inference error: " + e.Message + "\n" + e.StackTrace);
         }
-    }
-
-    private float[,,] BroadcastAdd3D(float[,,] a, float[,,] b)
-    {
-        int a0 = a.GetLength(0);
-        int a1 = a.GetLength(1);
-        int a2 = a.GetLength(2);
-
-        int b0 = b.GetLength(0);
-        int b1 = b.GetLength(1);
-        int b2 = b.GetLength(2);
-
-        if ((b0 != 1 && b0 != a0) || (b1 != 1 && b1 != a1) || (b2 != 1 && b2 != a2))
-            throw new ArgumentException("Incompatible shapes for broadcasting.");
-
-        float[,,] result = new float[a0, a1, a2];
-
-        for (int i = 0; i < a0; i++)
-        {
-            for (int j = 0; j < a1; j++)
-            {
-                for (int k = 0; k < a2; k++)
-                {
-                    float valA = a[i, j, k];
-                    float valB = b[b0 == 1 ? 0 : i, b1 == 1 ? 0 : j, b2 == 1 ? 0 : k];
-
-                    result[i, j, k] = valA + valB;
-                }
-            }
-        }
-
-        return result;
-    }
-
-    private float[][,,] PrepareBackboneFeatures(BackboneOutputs backboneData)
-    {
-        int numFeatureLevels = 3;
-
-        float[][,,,] featureMaps = backboneData.backboneFpn.TakeLast(numFeatureLevels).ToArray();
-
-        float[][,,] visionFeats = new float[numFeatureLevels][,,];
-
-        for (int i = 0; i < numFeatureLevels; i++)
-        {
-            float[,,,] x = featureMaps[i];
-            int N = x.GetLength(0);
-            int C = x.GetLength(1);
-            int H = x.GetLength(2);
-            int W = x.GetLength(3);
-            int HW = H * W;
-
-            float[,,] output = new float[HW, N, C];
-            for (int n = 0; n < N; n++)
-            {
-                for (int c = 0; c < C; c++)
-                {
-                    for (int h = 0; h < H; h++)
-                    {
-                        for (int w = 0; w < W; w++)
-                        {
-                            int hw = h * W + w;
-                            output[hw, n, c] = x[n, c, h, w];
-                        }
-                    }
-                }
-            }
-
-            visionFeats[i] = output;
-        }
-
-        return visionFeats;
-    }
-
-    public float[,,] TruncNormal(
-        int dim0,
-        int dim1,
-        int dim2,
-        float std = 0.02f,
-        float a = -2f,
-        float b = 2f
-    )
-    {
-        float[,,] values = new float[dim0, dim1, dim2];
-
-        for (int i = 0; i < dim0; i++)
-            for (int j = 0; j < dim1; j++)
-                for (int k = 0; k < dim2; k++)
-                {
-                    float val;
-                    do
-                    {
-                        val = NextGaussian(0f, std);
-                    } while (val < a * std || val > b * std);
-                    values[i, j, k] = val;
-                }
-
-        return values;
-    }
-
-    // Generates one sample from a Gaussian distribution using Box-Muller transform
-    private float NextGaussian(float mean = 0, float stdDev = 1)
-    {
-        double u1 = 1.0 - _rng.NextDouble();
-        double u2 = 1.0 - _rng.NextDouble();
-        double randStdNormal = Math.Sqrt(-2.0 * Math.Log(u1)) * Math.Sin(2.0 * Math.PI * u2);
-        return (float)(mean + stdDev * randStdNormal);
-    }
-
-    private float[] Flatten4D(float[,,,] input)
-    {
-        int N = input.GetLength(0);
-        int C = input.GetLength(1);
-        int H = input.GetLength(2);
-        int W = input.GetLength(3);
-
-        float[] flat = new float[N * C * H * W];
-        int index = 0;
-
-        for (int n = 0; n < N; n++)
-            for (int c = 0; c < C; c++)
-                for (int h = 0; h < H; h++)
-                    for (int w = 0; w < W; w++)
-                        flat[index++] = input[n, c, h, w];
-
-        return flat;
-    }
-
-    private float[,,] ReshapeTo3D(float[] flat, int z, int y, int x)
-    {
-        if (flat.Length != z * y * x)
-            throw new ArgumentException(
-                $"Input length {flat.Length} does not match shape ({z}, {y}, {x})"
-            );
-
-        float[,,] result = new float[z, y, x];
-        int index = 0;
-
-        for (int i = 0; i < z; i++)
-            for (int j = 0; j < y; j++)
-                for (int k = 0; k < x; k++)
-                    result[i, j, k] = flat[index++];
-
-        return result;
-    }
-
-    private float[,,,] ReshapeTo4D(float[] array, int w, int z, int y, int x)
-    {
-        if (array.Length != w * z * y * x)
-            throw new ArgumentException(
-                "flatArray length does not match the product of dimensions"
-            );
-
-        float[,,,] array4D = new float[w, z, y, x];
-        int index = 0;
-        for (int i = 0; i < w; i++)
-        {
-            for (int j = 0; j < z; j++)
-            {
-                for (int k = 0; k < y; k++)
-                {
-                    for (int l = 0; l < x; l++)
-                    {
-                        array4D[i, j, k, l] = array[index++];
-                    }
-                }
-            }
-        }
-        return array4D;
-    }
-
-    private float[,,] FourReshapeTo3D(float[,,,] input)
-    {
-        int d0 = input.GetLength(0);
-        int d1 = input.GetLength(1);
-        int d2 = input.GetLength(2);
-        int d3 = input.GetLength(3);
-
-        int d23 = d2 * d3;
-        float[,,] output = new float[d0, d1, d23];
-
-        for (int i0 = 0; i0 < d0; i0++)
-        {
-            for (int i1 = 0; i1 < d1; i1++)
-            {
-                for (int i2 = 0; i2 < d2; i2++)
-                {
-                    for (int i3 = 0; i3 < d3; i3++)
-                    {
-                        output[i0, i1, i2 * d3 + i3] = input[i0, i1, i2, i3];
-                    }
-                }
-            }
-        }
-
-        return output;
-    }
-
-    // Transpose axes (2, 0, 1) of 3D array
-    // input shape: [d0, d1, d2]
-    // output shape: [d2, d0, d1]
-    private float[,,] Transpose201(float[,,] input)
-    {
-        int d0 = input.GetLength(0);
-        int d1 = input.GetLength(1);
-        int d2 = input.GetLength(2);
-
-        float[,,] output = new float[d2, d0, d1];
-
-        for (int i0 = 0; i0 < d0; i0++)
-        {
-            for (int i1 = 0; i1 < d1; i1++)
-            {
-                for (int i2 = 0; i2 < d2; i2++)
-                {
-                    output[i2, i0, i1] = input[i0, i1, i2];
-                }
-            }
-        }
-
-        return output;
-    }
-
-    // Process all vision_pos_embeds arrays similarly to the python list comprehension
-    private float[][,,] ProcessVisionPosEmbeds(float[][,,,] visionPosEmbeds4D)
-    {
-        int n = visionPosEmbeds4D.Length;
-        float[][,,] output = new float[n][,,];
-
-        for (int i = 0; i < n; i++)
-        {
-            float[,,,] current4D = visionPosEmbeds4D[i];
-            float[,,] reshaped = FourReshapeTo3D(current4D);
-            float[,,] transposed = Transpose201(reshaped);
-            output[i] = transposed;
-        }
-        return output;
-    }
-
-    private struct BackboneOutputs
-    {
-        public float[,,,] visionFeatures;
-        public float[][,,,] visionPosEnc;
-        public float[][,,,] backboneFpn;
     }
 
     // Run Inference
@@ -788,16 +324,11 @@ public class SegmentAnything2Model
 
         try
         {
-            float[,] scaledCoords = ApplyCoordinateScaling(pointCoords, imgHeight, imgWidth);
+            float[,] scaledCoords = engine.ApplyCoordinateScaling(pointCoords, imgHeight, imgWidth);
 
             // Prepare point coordinates and labels
             int pointCount = pointLabels.Length;
-            float[] flattenedCoords = new float[pointCount * 2];
-            for (int i = 0; i < pointCount; i++)
-            {
-                flattenedCoords[i * 2] = scaledCoords[i, 0];
-                flattenedCoords[i * 2 + 1] = scaledCoords[i, 1];
-            }
+            float[] flattenedCoords = engine.FlattenCoords(scaledCoords, pointCount);
 
             float[] maskInputDummy;
             float[] masksEnable;
@@ -1207,8 +738,8 @@ public class SegmentAnything2Model
                 return (new bool[0][,], new float[0]);
             }
 
-            float[,,,] resized = PostprocessMasks(
-                ReshapeTo4D(
+            float[,,,] resized = engine.PostprocessMasks(
+                engine.ReshapeTo4D(
                     masksBlobOutput,
                     (int)masksBlobShape.w,
                     (int)masksBlobShape.z,
@@ -1218,7 +749,7 @@ public class SegmentAnything2Model
                 imgHeight,
                 imgWidth
             );
-            bool[][,] masksResult = ConvertToBoolMasks(resized);
+            bool[][,] masksResult = engine.ConvertToBoolMasks(resized);
 
             return (masksResult, iouPredBlobOutput);
         }
@@ -1227,52 +758,6 @@ public class SegmentAnything2Model
             Debug.LogError("Inference error: " + e.Message + "\n" + e.StackTrace);
             return (new bool[0][,], new float[0]);
         }
-    }
-
-    private float[,] ReshapeTo2D(float[] flat, int rows, int cols)
-    {
-        if (flat.Length != rows * cols)
-            throw new ArgumentException("Size mismatch between flat array and target shape.");
-
-        float[,] result = new float[rows, cols];
-
-        for (int r = 0; r < rows; r++)
-            for (int c = 0; c < cols; c++)
-                result[r, c] = flat[r * cols + c];
-
-        return result;
-    }
-
-    // Helper to convert 1D array to 4D array
-    private float[,,,] ReshapeToTensor(float[] data, int maskIndex, int height, int width, int area)
-    {
-        float[,,,] tensor = new float[1, 1, height, width];
-
-        int offset = maskIndex * area;
-        for (int h = 0; h < height; h++)
-        {
-            int rowOffset = h * width;
-            for (int w = 0; w < width; w++)
-            {
-                tensor[0, 0, h, w] = data[offset + rowOffset + w];
-            }
-        }
-
-        return tensor;
-    }
-
-    // Scale coordinates to target size
-    private float[,] ApplyCoordinateScaling(float[,] coords, int imgHeight, int imgWidth)
-    {
-        float[,] scaledCoords = new float[coords.GetLength(0), coords.GetLength(1)];
-
-        for (int i = 0; i < coords.GetLength(0); i++)
-        {
-            scaledCoords[i, 0] = coords[i, 0] * targetSize / imgWidth;
-            scaledCoords[i, 1] = coords[i, 1] * targetSize / imgHeight;
-        }
-
-        return scaledCoords;
     }
 
     // Overlay mask on original image
@@ -1370,8 +855,6 @@ public class SegmentAnything2Model
             Color32 markerColor =
                 labels[i] == 1 ? new Color32(0, 255, 0, 255) : new Color32(0, 0, 255, 255);
 
-            //Debug.Log($"{coords[i, 0]},{coords[i, 1]} => {px}, {py}");
-
             // Draw marker with bounds checking in the loop
             for (int dy = -markerSize; dy <= markerSize; dy++)
             {
@@ -1399,211 +882,7 @@ public class SegmentAnything2Model
 
     private float GetScale(int texWidth, int texHeight)
     {
-        return targetSize / (float)Mathf.Max(texWidth, texHeight);
-    }
-
-    private float[,,,] PreprocessImage(
-        Color32[] inputImage,
-        int originalWidth,
-        int originalHeight,
-        int imageSize
-    )
-    {
-        // Match SAM2 original: ToTensor -> Resize(bilinear) -> Normalize
-        // 1. Convert to float [0,1] (ToTensor equivalent)
-        float[,,] floatImage = Color32ArrayToFloatArray(inputImage, originalHeight, originalWidth);
-
-        // 2. Bilinear resize to (imageSize, imageSize)
-        float[,,] resizedImage = ResizeBilinearHWC(floatImage, originalHeight, originalWidth, imageSize, imageSize);
-
-        // 3. Normalize with ImageNet mean/std
-        for (int h = 0; h < imageSize; h++)
-        {
-            for (int w = 0; w < imageSize; w++)
-            {
-                for (int c = 0; c < 3; c++)
-                {
-                    resizedImage[h, w, c] = (resizedImage[h, w, c] - Mean[c]) / Std[c];
-                }
-            }
-        }
-
-        // Transpose (H, W, C) => (C, H, W)
-        float[,,] chw = TransposeHWCtoCHW(resizedImage);
-
-        // Add batch dimension => (1, C, H, W)
-        float[,,,] batch = new float[1, 3, imageSize, imageSize];
-        for (int c = 0; c < 3; c++)
-            for (int h = 0; h < imageSize; h++)
-                for (int w = 0; w < imageSize; w++)
-                    batch[0, c, h, w] = chw[c, h, w];
-
-        return batch;
-    }
-
-    // Bilinear resize for HWC float image (align_corners=False, matching PyTorch F.interpolate)
-    private float[,,] ResizeBilinearHWC(
-        float[,,] src,
-        int srcHeight,
-        int srcWidth,
-        int dstHeight,
-        int dstWidth
-    )
-    {
-        float[,,] dst = new float[dstHeight, dstWidth, 3];
-        float scaleY = (float)srcHeight / dstHeight;
-        float scaleX = (float)srcWidth / dstWidth;
-
-        for (int y = 0; y < dstHeight; y++)
-        {
-            float srcY = (y + 0.5f) * scaleY - 0.5f;
-            srcY = Math.Max(0, Math.Min(srcY, srcHeight - 1));
-            int y0 = (int)Math.Floor(srcY);
-            int y1 = Math.Min(y0 + 1, srcHeight - 1);
-            float dy = srcY - y0;
-
-            for (int x = 0; x < dstWidth; x++)
-            {
-                float srcX = (x + 0.5f) * scaleX - 0.5f;
-                srcX = Math.Max(0, Math.Min(srcX, srcWidth - 1));
-                int x0 = (int)Math.Floor(srcX);
-                int x1 = Math.Min(x0 + 1, srcWidth - 1);
-                float dx = srcX - x0;
-
-                for (int c = 0; c < 3; c++)
-                {
-                    float top = (1 - dx) * src[y0, x0, c] + dx * src[y0, x1, c];
-                    float bottom = (1 - dx) * src[y1, x0, c] + dx * src[y1, x1, c];
-                    dst[y, x, c] = (1 - dy) * top + dy * bottom;
-                }
-            }
-        }
-        return dst;
-    }
-
-    private float[,,] Color32ArrayToFloatArray(Color32[] image, int height, int width)
-    {
-        float[,,] result = new float[height, width, 3];
-        for (int i = 0; i < height * width; i++)
-        {
-            Color32 c = image[i];
-            int h = i / width;
-            int w = i % width;
-            result[h, w, 0] = c.r / 255f;
-            result[h, w, 1] = c.g / 255f;
-            result[h, w, 2] = c.b / 255f;
-        }
-        return result;
-    }
-
-    // Transpose (H,W,C) => (C,H,W)
-    private float[,,] TransposeHWCtoCHW(float[,,] input)
-    {
-        int H = input.GetLength(0);
-        int W = input.GetLength(1);
-        int C = input.GetLength(2);
-        float[,,] output = new float[C, H, W];
-        for (int h = 0; h < H; h++)
-            for (int w = 0; w < W; w++)
-                for (int c = 0; c < C; c++)
-                    output[c, h, w] = input[h, w, c];
-        return output;
-    }
-
-    private float[,] ResizeBilinear(float[,] src, int targetHeight, int targetWidth)
-    {
-        int srcHeight = src.GetLength(0);
-        int srcWidth = src.GetLength(1);
-
-        float[,] result = new float[targetHeight, targetWidth];
-
-        float scaleY = (float)srcHeight / targetHeight;
-        float scaleX = (float)srcWidth / targetWidth;
-
-        for (int y = 0; y < targetHeight; y++)
-        {
-            float srcY = (y + 0.5f) * scaleY - 0.5f;
-            srcY = Math.Max(0, Math.Min(srcY, srcHeight - 1));
-            int y0 = (int)Math.Floor(srcY);
-            int y1 = Math.Min(y0 + 1, srcHeight - 1);
-            float dy = srcY - y0;
-
-            for (int x = 0; x < targetWidth; x++)
-            {
-                float srcX = (x + 0.5f) * scaleX - 0.5f;
-                srcX = Math.Max(0, Math.Min(srcX, srcWidth - 1));
-                int x0 = (int)Math.Floor(srcX);
-                int x1 = Math.Min(x0 + 1, srcWidth - 1);
-                float dx = srcX - x0;
-
-                float top = (1 - dx) * src[y0, x0] + dx * src[y0, x1];
-                float bottom = (1 - dx) * src[y1, x0] + dx * src[y1, x1];
-                result[y, x] = (1 - dy) * top + dy * bottom;
-            }
-        }
-
-        return result;
-    }
-
-    private float[,,,] PostprocessMasks(float[,,,] masks, int targetHeight, int targetWidth)
-    {
-        int batch = masks.GetLength(0);
-        int channels = masks.GetLength(1);
-        int height = masks.GetLength(2);
-        int width = masks.GetLength(3);
-
-        float[,,,] resizedMasks = new float[batch, channels, targetHeight, targetWidth];
-
-        for (int n = 0; n < batch; n++)
-        {
-            for (int c = 0; c < channels; c++)
-            {
-                // Extract 2D mask
-                float[,] mask2D = new float[height, width];
-                for (int y = 0; y < height; y++)
-                    for (int x = 0; x < width; x++)
-                        mask2D[y, x] = masks[n, c, y, x];
-
-                // Resize it
-                float[,] resized2D = ResizeBilinear(mask2D, targetHeight, targetWidth);
-
-                // Store resized mask
-                for (int y = 0; y < targetHeight; y++)
-                    for (int x = 0; x < targetWidth; x++)
-                        resizedMasks[n, c, y, x] = resized2D[y, x];
-            }
-        }
-
-        return resizedMasks;
-    }
-
-    private bool[][,] ConvertToBoolMasks(float[,,,] masks, float threshold = 0.0f)
-    {
-        int batch = masks.GetLength(0);
-        int channels = masks.GetLength(1);
-        int height = masks.GetLength(2);
-        int width = masks.GetLength(3);
-
-        bool[][,] result = new bool[batch * channels][,];
-        int index = 0;
-
-        for (int b = 0; b < batch; b++)
-        {
-            for (int c = 0; c < channels; c++)
-            {
-                bool[,] binaryMask = new bool[height, width];
-                for (int y = 0; y < height; y++)
-                {
-                    for (int x = 0; x < width; x++)
-                    {
-                        binaryMask[y, x] = masks[b, c, y, x] > threshold;
-                    }
-                }
-                result[index++] = binaryMask;
-            }
-        }
-
-        return result;
+        return engine.GetScale(texWidth, texHeight);
     }
 
     // Calculate embedding of input image
@@ -1655,17 +934,8 @@ public class SegmentAnything2Model
 
             if (masks != null && masks.Length > 0 && scores != null && scores.Length > 0)
             {
-                // Find best mask
-                int bestMaskIndex = 0;
-                float maxScore = float.MinValue;
-                for (int i = 0; i < scores.Length; i++)
-                {
-                    if (scores[i] > maxScore)
-                    {
-                        maxScore = scores[i];
-                        bestMaskIndex = i;
-                    }
-                }
+                // Find best mask using shared engine
+                int bestMaskIndex = engine.FindBestMaskIndex(scores);
 
                 // TODO: remove for visualisation
                 if (visualizedResult != null)
@@ -1695,7 +965,6 @@ public class SegmentAnything2Model
             }
             else
             {
-                //Debug.LogWarning($"No valid masks");
                 visualizedResult = CreateEmptyMaskedImage(image, imageWidth, imageHeight);
                 success = true;
             }

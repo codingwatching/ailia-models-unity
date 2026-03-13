@@ -15,13 +15,13 @@
  */
 
 using NUnit.Framework;
-using Sam2MaskTests;
 using System;
+using UnityEngine;
 
 [TestFixture]
 public class PythonComparisonTest
 {
-    private Sam2ImageMaskLogic logic = null!;
+    private Sam2InferenceEngine logic = null!;
 
     // Tolerance for float comparison between Python and C#
     // Python uses float64 by default; C# uses float32.
@@ -31,7 +31,7 @@ public class PythonComparisonTest
     [SetUp]
     public void SetUp()
     {
-        logic = new Sam2ImageMaskLogic();
+        logic = new Sam2InferenceEngine();
     }
 
     // =======================================================

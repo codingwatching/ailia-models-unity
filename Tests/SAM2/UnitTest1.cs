@@ -11,19 +11,19 @@
  */
 
 using NUnit.Framework;
-using Sam2MaskTests;
 using System;
+using UnityEngine;
 
 [TestFixture]
 public class SegmentAnything2MaskTest
 {
-    private Sam2ImageMaskLogic logic = null!;
+    private Sam2InferenceEngine logic = null!;
     private const float Tolerance = 1e-5f;
 
     [SetUp]
     public void SetUp()
     {
-        logic = new Sam2ImageMaskLogic();
+        logic = new Sam2InferenceEngine();
     }
 
     // =======================================================
