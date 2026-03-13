@@ -214,13 +214,11 @@ namespace ailiaSDK
 				inputImageWidth = ailia_camera.GetWidth();
 				inputImageHeight = ailia_camera.GetHeight();
 				inputImage = ailia_camera.GetPixels32(); // Bottom2Top format
-				inputImage = VerticalFlip(inputImage, inputImageWidth, inputImageHeight); // Top2Bottom format
 			}else{
-				bool convert_to_top2bottom = true;
 				inputImageWidth = AiliaImageSource.Width;
 				inputImageHeight = AiliaImageSource.Height;
 				Rect rect = new Rect(0, 0, inputImageWidth, inputImageHeight);
-				inputImage = AiliaImageSource.GetPixels32(rect, convert_to_top2bottom); // Top2Bottom format
+				inputImage = AiliaImageSource.GetPixels32(rect); // Bottom2Top format
 			}
 
 			long end_time = DateTime.UtcNow.Ticks / TimeSpan.TicksPerMillisecond;
@@ -312,8 +310,8 @@ namespace ailiaSDK
 			labelTexture.Apply();
 			blendMaterial.SetTexture(blendTexId, labelTexture);
 
-			blendMaterial.SetFloat(mainVFlipId, 1);	//originalTexture is Top2Bottom
-			blendMaterial.SetFloat(blendVFlipId, 1);	//outputImage is Top2Bottom
+			blendMaterial.SetFloat(mainVFlipId, 0);	//originalTexture is Bottom2Top
+			blendMaterial.SetFloat(blendVFlipId, 0);	//outputImage is Bottom2Top
 
 
 			float rawImageRatio = rawImageSize.x / rawImageSize.y;

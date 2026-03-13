@@ -716,6 +716,7 @@ public class SegmentAnything2Model
     }
 
     // Overlay mask on original image
+    // Both mask and pixels must be in the same pixel order (B2T for Unity)
     private Texture2D CreateMaskedImage(
         bool[,] mask,
         Color32[] pixels,
@@ -723,16 +724,16 @@ public class SegmentAnything2Model
         int imageHeight
     )
     {
-        Texture2D result = new Texture2D(imageWidth, imageHeight, TextureFormat.ARGB32, false);
+        Texture2D result = new Texture2D(imageWidth, imageHeight, TextureFormat.RGBA32, false);
 
         int maskHeight = mask.GetLength(0);
         int maskWidth = mask.GetLength(1);
 
-        // Apply mask to original image - optimized inner loop
+        // Apply mask to original image
+        // mask[y,x] and pixels[y*width+x] are both in the same order (B2T)
         for (int y = 0; y < maskHeight; y++)
         {
-            int unityY = y;
-            int rowOffset = unityY * imageWidth;
+            int rowOffset = y * imageWidth;
 
             for (int x = 0; x < maskWidth; x++)
             {
@@ -758,26 +759,7 @@ public class SegmentAnything2Model
 
     private Texture2D CreateEmptyMaskedImage(Color32[] pixels, int imageWidth, int imageHeight)
     {
-        Texture2D result = new Texture2D(imageWidth, imageHeight, TextureFormat.ARGB32, false);
-
-        // Apply mask to original image - optimized inner loop
-        for (int y = 0; y < imageHeight; y++)
-        {
-            int unityY = y;
-            int rowOffset = unityY * imageWidth;
-
-            for (int x = 0; x < imageWidth; x++)
-            {
-                int pixelIndex = rowOffset + x;
-
-                if (pixelIndex >= 0 && pixelIndex < pixels.Length)
-                {
-                    Color32 originalColor = pixels[pixelIndex];
-                    pixels[pixelIndex] = originalColor;
-                }
-            }
-        }
-
+        Texture2D result = new Texture2D(imageWidth, imageHeight, TextureFormat.RGBA32, false);
         result.SetPixels32(pixels);
         result.Apply();
         return result;
@@ -841,14 +823,16 @@ public class SegmentAnything2Model
     }
 
     // Calculate embedding of input image
-    // image : top bottom format
+    // image : bottom-to-top format (Unity native)
     public void ProcessEmbedding(Color32[] image, int imageWidth, int imageHeight)
     {
         if (!modelsInitialized || isProcessing || isQuitting)
         {
             return;
         }
-        RunEmbedding(image, imageWidth, imageHeight);
+        // Flip B2T (Unity) -> T2B (SAM2) for inference
+        Color32[] t2bImage = Sam2InferenceEngine.VerticalFlip(image, imageWidth, imageHeight);
+        RunEmbedding(t2bImage, imageWidth, imageHeight);
     }
 
     // Check embedding exist
@@ -858,7 +842,8 @@ public class SegmentAnything2Model
     }
 
     // Calculate mask of input image
-    // image : top bottom format
+    // image : bottom-to-top format (Unity native)
+    // Output visualization is also bottom-to-top for SetPixels32
     public void ProcessMask(Color32[] image, int imageWidth, int imageHeight)
     {
         if (!modelsInitialized || isProcessing || isQuitting)
@@ -870,7 +855,7 @@ public class SegmentAnything2Model
         {
             isProcessing = true;
 
-            // Set up point coords for inference
+            // Set up point coords for inference (T2B coordinate space)
             float[,] coords = GetClickPoints(imageHeight);
             float[] labels = GetPointLabels();
 
@@ -892,14 +877,17 @@ public class SegmentAnything2Model
                 // Find best mask using shared engine
                 int bestMaskIndex = engine.FindBestMaskIndex(scores);
 
-                // TODO: remove for visualisation
+                // Flip mask T2B -> B2T (Unity native) so mask aligns with B2T pixels
+                bool[,] b2tMask = Sam2InferenceEngine.VerticalFlipMask(masks[bestMaskIndex]);
+
                 if (visualizedResult != null)
                 {
                     GameObject.Destroy(visualizedResult);
                 }
 
+                // Both b2tMask and image are B2T -> SetPixels32 works correctly
                 visualizedResult = CreateMaskedImage(
-                    masks[bestMaskIndex],
+                    b2tMask,
                     image,
                     imageWidth,
                     imageHeight
@@ -908,7 +896,14 @@ public class SegmentAnything2Model
                 // Only draw click points if the showClickPoints flag is enabled
                 if (showClickPoints)
                 {
-                    visualizedResult = DrawClickPoints(coords, labels, visualizedResult);
+                    // Convert T2B click coords to B2T for drawing on B2T texture
+                    float[,] b2tCoords = new float[coords.GetLength(0), 2];
+                    for (int i = 0; i < coords.GetLength(0); i++)
+                    {
+                        b2tCoords[i, 0] = coords[i, 0];
+                        b2tCoords[i, 1] = imageHeight - 1 - coords[i, 1];
+                    }
+                    visualizedResult = DrawClickPoints(b2tCoords, labels, visualizedResult);
                 }
 
                 if (saveFrame)

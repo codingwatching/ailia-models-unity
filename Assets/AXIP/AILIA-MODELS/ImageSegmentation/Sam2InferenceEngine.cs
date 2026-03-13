@@ -277,6 +277,29 @@ public class Sam2InferenceEngine
         return dst;
     }
 
+    // ---------------------------------------------------
+    // Pixel order conversion (Unity B2T <-> SAM2 T2B)
+    // ---------------------------------------------------
+    public static Color32[] VerticalFlip(Color32[] inputImage, int width, int height)
+    {
+        Color32[] outputImage = new Color32[width * height];
+        for (int y = 0; y < height; y++)
+            for (int x = 0; x < width; x++)
+                outputImage[(height - 1 - y) * width + x] = inputImage[y * width + x];
+        return outputImage;
+    }
+
+    public static bool[,] VerticalFlipMask(bool[,] mask)
+    {
+        int height = mask.GetLength(0);
+        int width = mask.GetLength(1);
+        bool[,] flipped = new bool[height, width];
+        for (int y = 0; y < height; y++)
+            for (int x = 0; x < width; x++)
+                flipped[height - 1 - y, x] = mask[y, x];
+        return flipped;
+    }
+
     public float[,,,] PreprocessImage(Color32[] inputImage, int originalWidth, int originalHeight, int imageSize)
     {
         // Match SAM2 original: ToTensor -> Resize(bilinear) -> Normalize

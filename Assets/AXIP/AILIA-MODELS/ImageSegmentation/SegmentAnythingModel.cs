@@ -493,7 +493,7 @@ public class SegmentAnythingModel
     // Overlay mask on original image
     private Texture2D CreateMaskedImage(bool[,] mask, Color32 [] pixels, int imageWidth, int imageHeight)
     {
-        Texture2D result = new Texture2D(imageWidth, imageHeight, TextureFormat.ARGB32, false);
+        Texture2D result = new Texture2D(imageWidth, imageHeight, TextureFormat.RGBA32, false);
         
         int maskHeight = mask.GetLength(0);
         int maskWidth = mask.GetLength(1);
@@ -528,7 +528,7 @@ public class SegmentAnythingModel
 
     private Texture2D CreateEmptyMaskedImage(Color32 [] pixels, int imageWidth, int imageHeight)
     {
-        Texture2D result = new Texture2D(imageWidth, imageHeight, TextureFormat.ARGB32, false);
+        Texture2D result = new Texture2D(imageWidth, imageHeight, TextureFormat.RGBA32, false);
         
         // Apply mask to original image - optimized inner loop
         for (int y = 0; y < imageHeight; y++)
