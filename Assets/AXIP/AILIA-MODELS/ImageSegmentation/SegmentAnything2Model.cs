@@ -32,10 +32,7 @@ public class SegmentAnything2Model
     private int targetSize = 1024;
     private ailia.AiliaModel encoder;
     private ailia.AiliaModel decoder;
-    private ailia.AiliaModel memAttention;
-    private ailia.AiliaModel encoderMem;
     private ailia.AiliaModel prompt;
-    private ailia.AiliaModel mlp;
 
     public bool modelsInitialized { get; private set; } = false;
     public bool isProcessing { get; private set; } = false;
@@ -53,7 +50,6 @@ public class SegmentAnything2Model
     private bool saveFrame = false;
     private float[] encoderOutput = null;
     private float[][] highResFeats = null;
-    private System.Random _rng = new System.Random();
 
     // Shared inference engine (all computational logic)
     private readonly Sam2InferenceEngine engine = new Sam2InferenceEngine();
@@ -239,18 +235,12 @@ public class SegmentAnything2Model
             }
 
             int visionFeaturesBlobIndex = encoder.FindBlobIndexByName("vision_features");
-            int visionPosEnc0BlobIndex = encoder.FindBlobIndexByName("vision_pos_enc_0");
-            int visionPosEnc1BlobIndex = encoder.FindBlobIndexByName("vision_pos_enc_1");
-            int visionPosEnc2BlobIndex = encoder.FindBlobIndexByName("vision_pos_enc_2");
             int backboneFpn0BlobIndex = encoder.FindBlobIndexByName("backbone_fpn_0");
             int backboneFpn1BlobIndex = encoder.FindBlobIndexByName("backbone_fpn_1");
             int backboneFpn2BlobIndex = encoder.FindBlobIndexByName("backbone_fpn_2");
 
             if (
                 visionFeaturesBlobIndex < 0
-                || visionPosEnc0BlobIndex < 0
-                || visionPosEnc1BlobIndex < 0
-                || visionPosEnc2BlobIndex < 0
                 || backboneFpn0BlobIndex < 0
                 || backboneFpn1BlobIndex < 0
                 || backboneFpn2BlobIndex < 0
@@ -543,17 +533,17 @@ public class SegmentAnything2Model
 
             ailia.Ailia.AILIAShape highResFeatures1Shape = new ailia.Ailia.AILIAShape();
             highResFeatures1Shape.dim = 4;
-            highResFeatures1Shape.w = 1; // batch=1
-            highResFeatures1Shape.z = 32; // channel=256
-            highResFeatures1Shape.y = 256; // height=64
-            highResFeatures1Shape.x = 256; // width=64
+            highResFeatures1Shape.w = 1;   // batch
+            highResFeatures1Shape.z = 32;  // channel
+            highResFeatures1Shape.y = 256; // height
+            highResFeatures1Shape.x = 256; // width
 
             ailia.Ailia.AILIAShape highResFeatures2Shape = new ailia.Ailia.AILIAShape();
             highResFeatures2Shape.dim = 4;
-            highResFeatures2Shape.w = 1; // batch=1
-            highResFeatures2Shape.z = 64; // channel=256
-            highResFeatures2Shape.y = 128; // height=128
-            highResFeatures2Shape.x = 128; // width=128
+            highResFeatures2Shape.w = 1;   // batch
+            highResFeatures2Shape.z = 64;  // channel
+            highResFeatures2Shape.y = 128; // height
+            highResFeatures2Shape.x = 128; // width
 
             bool imageEmbeddingsShapeResult = decoder.SetInputBlobShape(
                 imageEmbeddingsShape,
@@ -666,15 +656,8 @@ public class SegmentAnything2Model
 
             int masksBlobIndex = decoder.FindBlobIndexByName("masks");
             int iouPredBlobIndex = decoder.FindBlobIndexByName("iou_pred");
-            int samTokensOutBlobIndex = decoder.FindBlobIndexByName("sam_tokens_out");
-            int objectScoreLogitsBlobIndex = decoder.FindBlobIndexByName("object_score_logits");
 
-            if (
-                masksBlobIndex < 0
-                || iouPredBlobIndex < 0
-                || samTokensOutBlobIndex < 0
-                || objectScoreLogitsBlobIndex < 0
-            )
+            if (masksBlobIndex < 0 || iouPredBlobIndex < 0)
             {
                 Debug.LogError("Could not find required indices");
                 return (new bool[0][,], new float[0]);
@@ -693,41 +676,13 @@ public class SegmentAnything2Model
             ailia.Ailia.AILIAShape iouPredBlobShape = decoder.GetBlobShape((uint)iouPredBlobIndex);
             float[] iouPredBlobOutput = new float[iouPredBlobShape.y * iouPredBlobShape.x];
 
-            ailia.Ailia.AILIAShape samTokensOutBlobShape = decoder.GetBlobShape(
-                (uint)samTokensOutBlobIndex
-            );
-            float[] samTokensOutBlobOutput = new float[
-                samTokensOutBlobShape.z * samTokensOutBlobShape.y * samTokensOutBlobShape.x
-            ];
-
-            ailia.Ailia.AILIAShape objectScoreLogitsBlobShape = decoder.GetBlobShape(
-                (uint)objectScoreLogitsBlobIndex
-            );
-            float[] objectScoreLogitsBlobOutput = new float[
-                objectScoreLogitsBlobShape.y * objectScoreLogitsBlobShape.x
-            ];
-
             bool getMasksBlobResult = decoder.GetBlobData(masksBlobOutput, (uint)masksBlobIndex);
             bool getiouPredBlobResult = decoder.GetBlobData(
                 iouPredBlobOutput,
                 (uint)iouPredBlobIndex
             );
-            bool getsamTokensBlobResult = decoder.GetBlobData(
-                samTokensOutBlobOutput,
-                (uint)samTokensOutBlobIndex
-            );
 
-            bool objectScoreLogitsBlobResult = decoder.GetBlobData(
-                objectScoreLogitsBlobOutput,
-                (uint)objectScoreLogitsBlobIndex
-            );
-
-            if (
-                !getMasksBlobResult
-                || !getiouPredBlobResult
-                || !getsamTokensBlobResult
-                || !objectScoreLogitsBlobResult
-            )
+            if (!getMasksBlobResult || !getiouPredBlobResult)
             {
                 Debug.LogError("Failed to get blob data");
                 return (new bool[0][,], new float[0]);
@@ -1013,19 +968,8 @@ public class SegmentAnything2Model
         try
         {
             string fileNamePrefix = "output";
-            // Create path to output directory
-            string directory = System.IO.Path.Combine(
-                Application.persistentDataPath,
-                CreateOutputDirectory()
-            );
+            string directory = CreateOutputDirectory();
 
-            // Ensure directory exists
-            if (!System.IO.Directory.Exists(directory))
-            {
-                System.IO.Directory.CreateDirectory(directory);
-            }
-
-            // Generate filename with frame number and optional timestamp
             string fileName = $"{fileNamePrefix}.png";
 
             // Full path to file
