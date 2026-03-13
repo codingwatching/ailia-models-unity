@@ -3,7 +3,7 @@
 /*
  * Tests Sam2Processor directly — the class that owns all SAM2 inference logic.
  * Sam2Processor is used by SegmentAnything2Model (Unity wrapper) and can be
- * tested standalone with any ISam2Backend (ORT or ailia).
+ * tested standalone with AiliaSam2Backend.
  *
  * Covers:
  *   - Click point / box management
@@ -46,7 +46,10 @@ public class SegmentAnything2ModelTest
     private string PromptPath => Path.Combine(MODEL_DIR, "prompt_encoder_hiera_l.onnx");
 
     private bool ModelsExist() =>
-        File.Exists(EncoderPath) && File.Exists(DecoderPath) && File.Exists(PromptPath);
+        File.Exists(EncoderPath) && File.Exists(DecoderPath) && File.Exists(PromptPath)
+        && File.Exists(EncoderPath + ".prototxt")
+        && File.Exists(DecoderPath + ".prototxt")
+        && File.Exists(PromptPath + ".prototxt");
 
     // =======================================================
     // Image loading helpers
@@ -152,11 +155,11 @@ public class SegmentAnything2ModelTest
     }
 
     // =======================================================
-    // Create a Sam2Processor with ORT backend
+    // Create a Sam2Processor with ailia backend
     // =======================================================
-    private (Sam2Processor processor, OrtSam2Backend backend) CreateOrtProcessor()
+    private (Sam2Processor processor, AiliaSam2Backend backend) CreateAiliaProcessor()
     {
-        var backend = new OrtSam2Backend();
+        var backend = new AiliaSam2Backend();
         backend.LoadModels(EncoderPath, DecoderPath, PromptPath);
         var processor = new Sam2Processor(backend);
         return (processor, backend);
@@ -177,7 +180,7 @@ public class SegmentAnything2ModelTest
         if (!ModelsExist())
             Assert.Ignore("Models needed to construct processor");
 
-        var (processor, backend) = CreateOrtProcessor();
+        var (processor, backend) = CreateAiliaProcessor();
         using var _ = backend;
 
         processor.AddClickPoint(500, 375);
@@ -212,7 +215,7 @@ public class SegmentAnything2ModelTest
         if (!ModelsExist())
             Assert.Ignore("Models needed to construct processor");
 
-        var (processor, backend) = CreateOrtProcessor();
+        var (processor, backend) = CreateAiliaProcessor();
         using var _ = backend;
 
         processor.AddClickPoint(100, 100);
@@ -239,7 +242,7 @@ public class SegmentAnything2ModelTest
         if (!File.Exists(PNG_IMAGE_PATH))
             Assert.Ignore("truck.png not found");
 
-        var (processor, backend) = CreateOrtProcessor();
+        var (processor, backend) = CreateAiliaProcessor();
         using var _ = backend;
 
         Assert.That(processor.EmbeddingExist(), Is.False);
@@ -262,7 +265,7 @@ public class SegmentAnything2ModelTest
         if (!File.Exists(PNG_IMAGE_PATH))
             Assert.Ignore("truck.png not found");
 
-        var (processor, backend) = CreateOrtProcessor();
+        var (processor, backend) = CreateAiliaProcessor();
         using var _ = backend;
 
         var (t2bPixels, imgW, imgH) = LoadPngTopToBottom(PNG_IMAGE_PATH);
@@ -284,7 +287,7 @@ public class SegmentAnything2ModelTest
         if (!File.Exists(PNG_IMAGE_PATH))
             Assert.Ignore("truck.png not found");
 
-        var (processor, backend) = CreateOrtProcessor();
+        var (processor, backend) = CreateAiliaProcessor();
         using var _ = backend;
 
         var (t2bPixels, imgW, imgH) = LoadPngTopToBottom(PNG_IMAGE_PATH);
@@ -443,7 +446,7 @@ public class SegmentAnything2ModelTest
         if (!File.Exists(PNG_IMAGE_PATH))
             Assert.Ignore("truck.png not found");
 
-        var (processor, backend) = CreateOrtProcessor();
+        var (processor, backend) = CreateAiliaProcessor();
         using var _ = backend;
 
         var (t2bPixels, imgW, imgH) = LoadPngTopToBottom(PNG_IMAGE_PATH);
@@ -506,7 +509,7 @@ public class SegmentAnything2ModelTest
         if (!File.Exists(PNG_IMAGE_PATH))
             Assert.Ignore("truck.png not found");
 
-        var (processor, backend) = CreateOrtProcessor();
+        var (processor, backend) = CreateAiliaProcessor();
         using var _ = backend;
 
         var (t2bPixels, imgW, imgH) = LoadPngTopToBottom(PNG_IMAGE_PATH);
@@ -536,7 +539,7 @@ public class SegmentAnything2ModelTest
         if (!File.Exists(PNG_IMAGE_PATH))
             Assert.Ignore("truck.png not found");
 
-        var (processor, backend) = CreateOrtProcessor();
+        var (processor, backend) = CreateAiliaProcessor();
         using var _ = backend;
 
         var (t2bPixels, imgW, imgH) = LoadPngTopToBottom(PNG_IMAGE_PATH);
@@ -566,7 +569,7 @@ public class SegmentAnything2ModelTest
         if (!File.Exists(PNG_IMAGE_PATH))
             Assert.Ignore("truck.png not found");
 
-        var (processor, backend) = CreateOrtProcessor();
+        var (processor, backend) = CreateAiliaProcessor();
         using var _ = backend;
 
         var (t2bPixels, imgW, imgH) = LoadPngTopToBottom(PNG_IMAGE_PATH);
@@ -608,7 +611,7 @@ public class SegmentAnything2ModelTest
             Assert.Ignore("truck.png not found");
 
         var engine = new Sam2InferenceEngine();
-        var backend = new OrtSam2Backend();
+        var backend = new AiliaSam2Backend();
         backend.LoadModels(EncoderPath, DecoderPath, PromptPath);
         using var _ = backend;
 

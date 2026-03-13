@@ -542,8 +542,9 @@ public class UnityInputSimulationTest
         string decoderPath = Path.Combine(MODEL_DIR, "mask_decoder_hiera_l.onnx");
         string promptPath = Path.Combine(MODEL_DIR, "prompt_encoder_hiera_l.onnx");
 
-        if (!File.Exists(encoderPath) || !File.Exists(decoderPath) || !File.Exists(promptPath))
-            Assert.Ignore("ONNX models not found in " + MODEL_DIR);
+        if (!File.Exists(encoderPath) || !File.Exists(decoderPath) || !File.Exists(promptPath)
+            || !File.Exists(encoderPath + ".prototxt") || !File.Exists(decoderPath + ".prototxt") || !File.Exists(promptPath + ".prototxt"))
+            Assert.Ignore("ailia models (ONNX + prototxt) not found in " + MODEL_DIR);
         if (!File.Exists(PNG_IMAGE_PATH))
             Assert.Ignore("truck.png not found at " + PNG_IMAGE_PATH);
 
@@ -559,7 +560,7 @@ public class UnityInputSimulationTest
         float[,,,] directPreprocessed = logic.PreprocessImage(top2bottom, imgW, imgH, 1024);
         float[] directNchw = logic.Flatten4D(directPreprocessed);
 
-        using var backend = new OrtSam2Backend();
+        using var backend = new AiliaSam2Backend();
         backend.LoadModels(encoderPath, decoderPath, promptPath);
 
         var unityMask = RunInferencePipeline(backend, unityNchw, imgW, imgH);

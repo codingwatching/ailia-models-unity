@@ -335,27 +335,8 @@ public class Sam2InferenceTest
     }
 
     // =======================================================
-    // Test: ORT Backend
-    // =======================================================
-    [Test]
-    public void FullInference_ORT()
-    {
-        if (!ModelsExist())
-            Assert.Ignore("ONNX models not found in " + MODEL_DIR);
-        if (!File.Exists(PNG_IMAGE_PATH))
-            Assert.Ignore("PNG test image not found.");
-
-        using var backend = new OrtSam2Backend();
-        backend.LoadModels(EncoderPath, DecoderPath, PromptPath);
-        RunEndToEndTest(backend, "ORT");
-    }
-
-    // =======================================================
     // Test: ailia Backend
-    // Requires: AILIA_SDK define + ailia-csharp wrapper + native library
-    // Build with: dotnet test -p:DefineConstants=AILIA_SDK
     // =======================================================
-#if AILIA_SDK
     [Test]
     public void FullInference_Ailia()
     {
@@ -380,59 +361,4 @@ public class Sam2InferenceTest
             Assert.Ignore($"ailia SDK types not available: {ex.Message}");
         }
     }
-
-    // =======================================================
-    // Test: Compare ORT vs ailia outputs
-    // =======================================================
-    [Test]
-    public void CompareBackends_ORT_vs_Ailia()
-    {
-        if (!AiliaModelsExist())
-            Assert.Ignore("ailia models not found");
-        if (!File.Exists(PNG_IMAGE_PATH))
-            Assert.Ignore("PNG test image not found.");
-
-        var (pixels, imgW, imgH) = LoadPngImage(PNG_IMAGE_PATH);
-        float[,,,] preprocessed = logic.PreprocessImage(pixels, imgW, imgH, 1024);
-        float[] nchwInput = logic.Flatten4D(preprocessed);
-
-        bool[,] ortMask, ailiaMask;
-
-        try
-        {
-            using var ortBackend = new OrtSam2Backend();
-            ortBackend.LoadModels(EncoderPath, DecoderPath, PromptPath);
-            (ortMask, _, _, _) = RunFullPipeline(ortBackend, nchwInput);
-        }
-        catch (Exception ex)
-        {
-            Assert.Ignore($"ORT backend failed: {ex.Message}");
-            return;
-        }
-
-        try
-        {
-            using var ailiaBackend = new AiliaSam2Backend();
-            ailiaBackend.LoadModels(EncoderPath, DecoderPath, PromptPath);
-            (ailiaMask, _, _, _) = RunFullPipeline(ailiaBackend, nchwInput);
-        }
-        catch (Exception ex)
-        {
-            Assert.Ignore($"ailia backend failed: {ex.Message}");
-            return;
-        }
-
-        var (matchRate, diffCount, onlyOrt, onlyAilia) = CompareMasks(ortMask, ailiaMask);
-        Console.WriteLine($"\n=== ORT vs ailia Comparison ===");
-        Console.WriteLine($"Match rate: {matchRate:F4}%");
-        Console.WriteLine($"Different: {diffCount}");
-        Console.WriteLine($"  Only ORT: {onlyOrt}");
-        Console.WriteLine($"  Only ailia: {onlyAilia}");
-
-        SaveDiffPng(ortMask, ailiaMask, Path.Combine(CSHARP_OUTPUT_DIR, "diff_ort_vs_ailia.png"));
-
-        Assert.That(matchRate, Is.GreaterThan(99.0),
-            $"ORT vs ailia should match > 99%, got {matchRate:F4}%");
-    }
-#endif
 }
