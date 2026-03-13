@@ -409,9 +409,10 @@ namespace ailiaSDK
             Vector3[] corners = new Vector3[4];
             raw_image.rectTransform.GetWorldCorners(corners);
 
+            // Use bottom-origin coordinates (same as Input.mousePosition)
             Rect rawImageRect = new Rect(
                 corners[0].x,
-                Screen.height - corners[2].y,
+                corners[0].y,
                 corners[2].x - corners[0].x,
                 corners[2].y - corners[0].y
             );
@@ -422,6 +423,8 @@ namespace ailiaSDK
             float heightRatio = raw_image.texture.height / rawImageRect.height;
 
             int x = Mathf.Clamp(Mathf.RoundToInt((mousePos.x - rawImageRect.x) * widthRatio), 0, raw_image.texture.width - 1);
+            // mousePos.y - corners[0].y: 0 at bottom, height at top (bottom-origin)
+            // Flip to T2B for AddClickPoint
             int y = raw_image.texture.height - 1 - Mathf.Clamp(Mathf.RoundToInt((mousePos.y - rawImageRect.y) * heightRatio), 0, raw_image.texture.height - 1);
 
             if (rawImageRect.Contains(mousePos))
