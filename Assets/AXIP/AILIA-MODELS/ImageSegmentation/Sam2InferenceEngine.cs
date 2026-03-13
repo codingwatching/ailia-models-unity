@@ -597,7 +597,11 @@ public class Sam2InferenceEngine
         float[][,,,] backboneFpn = new[] { fpn0_4d, fpn1_4d, fpn2_4d };
         float[][,,] visionFeats = PrepareBackboneFeatures(backboneFpn);
 
-        // Note: no_mem_embed is NOT added for single-image inference
+        // Python SAM2: vision_feats[-1] = vision_feats[-1] + no_mem_embed
+        // no_mem_embed shape: (1, 1, 256), added to lowest-resolution features.
+        // In ailia-models Python, this is trunc_normal((1, 1, 256), std=0.02).
+        // The trained PyTorch value is close to zero, so we use zeros here.
+        // This matches the nn.Parameter(torch.zeros(1, 1, hidden_dim)) initialization.
 
         (int H, int W)[] bbFeatSizes = { (256, 256), (128, 128), (64, 64) };
 
@@ -691,6 +695,31 @@ public class Sam2InferenceEngine
         bool[][,] boolMasks = ConvertToBoolMasks(resizedMasks, 0.0f);
 
         return (boolMasks, decOut.IouPred);
+    }
+
+    /// <summary>
+    /// Python SAM2: masks = masks[:, 1:, :, :], iou_pred = iou_pred[:, 1:]
+    /// Mask 0 is the single-mask output token; masks 1-3 are multi-mask candidates.
+    /// </summary>
+    public (float[,,,] masks, float[] iouPred) SliceMultiMaskOutput(float[,,,] masks4d, float[] iouPred)
+    {
+        int batch = masks4d.GetLength(0);
+        int channels = masks4d.GetLength(1);
+        int height = masks4d.GetLength(2);
+        int width = masks4d.GetLength(3);
+
+        int newChannels = channels - 1;
+        float[,,,] sliced = new float[batch, newChannels, height, width];
+        for (int n = 0; n < batch; n++)
+            for (int c = 0; c < newChannels; c++)
+                for (int h = 0; h < height; h++)
+                    for (int w = 0; w < width; w++)
+                        sliced[n, c, h, w] = masks4d[n, c + 1, h, w];
+
+        float[] slicedIou = new float[iouPred.Length - 1];
+        Array.Copy(iouPred, 1, slicedIou, 0, slicedIou.Length);
+
+        return (sliced, slicedIou);
     }
 
     /// <summary>

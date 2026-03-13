@@ -10,9 +10,9 @@
  *   - Color32 has RGBA byte layout (TextureFormat.RGBA32)
  *
  * After fix, the data flow is:
- *   WebCam/Image -> GetPixels32 (B2T) -> ProcessEmbedding/ProcessMask (B2T)
- *   -> [internal: VerticalFlip to T2B -> SAM2 inference -> VerticalFlipMask to B2T]
- *   -> B2T mask + B2T pixels -> SetPixels32 -> correct display
+ *   WebCam/Image -> GetPixels32 (B2T) -> ProcessEmbedding (B2T -> internal T2B flip)
+ *   -> ProcessMask -> T2B mask output
+ *   -> caller flips T2B mask to B2T -> overlay on B2T pixels -> SetPixels32
  */
 
 using NUnit.Framework;

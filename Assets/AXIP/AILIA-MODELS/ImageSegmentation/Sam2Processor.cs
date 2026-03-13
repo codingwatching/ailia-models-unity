@@ -7,9 +7,13 @@
  * Handles:
  *   - Click point / box management
  *   - ProcessEmbedding: B2T -> T2B flip -> encode -> prepare features
- *   - ProcessMask: coords -> inference -> best mask -> T2B -> B2T flip
+ *   - ProcessMask: coords -> inference -> best mask (T2B output)
  *   - Mask overlay on Color32[] pixels
  *   - Click point visualization on Color32[] pixels
+ *
+ * Note: SAM2 internally works in T2B (top-to-bottom) format.
+ * The caller (e.g. SegmentAnything2Model) is responsible for
+ * flipping masks to B2T if needed for Unity's SetPixels32.
  *
  * Unity: included directly via the project
  * Tests: linked via <Compile Include="...Sam2Processor.cs" Link="..." />
@@ -20,12 +24,12 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// Result of ProcessMask.
+/// Result of ProcessMask. Mask is in T2B (top-to-bottom) format.
 /// </summary>
 public struct Sam2MaskResult
 {
     public bool HasMask;
-    public bool[,] B2TMask;
+    public bool[,] Mask;
     public int BestMaskIndex;
     public float BestScore;
     public float[] IouPredictions;
@@ -102,8 +106,8 @@ public class Sam2Processor
     // ---------------------------------------------------
 
     /// <summary>
-    /// Compute mask from B2T image using stored embedding and click points.
-    /// Returns B2T mask ready for overlay on B2T pixels.
+    /// Compute mask using stored embedding and click points.
+    /// Returns T2B mask (SAM2 native format). Caller flips to B2T if needed for Unity.
     /// </summary>
     public Sam2MaskResult ProcessMask(int imgWidth, int imgHeight)
     {
@@ -119,12 +123,11 @@ public class Sam2Processor
             return new Sam2MaskResult { HasMask = false };
 
         int bestIdx = engine.FindBestMaskIndex(iouPred);
-        bool[,] b2tMask = Sam2InferenceEngine.VerticalFlipMask(masks[bestIdx]);
 
         return new Sam2MaskResult
         {
             HasMask = true,
-            B2TMask = b2tMask,
+            Mask = masks[bestIdx],
             BestMaskIndex = bestIdx,
             BestScore = iouPred[bestIdx],
             IouPredictions = iouPred,
@@ -154,10 +157,15 @@ public class Sam2Processor
         float[,,,] masks4d = engine.ReshapeTo4D(decOut.Masks,
             decOut.MasksShape[0], decOut.MasksShape[1],
             decOut.MasksShape[2], decOut.MasksShape[3]);
-        float[,,,] resizedMasks = engine.PostprocessMasks(masks4d, imgHeight, imgWidth);
+
+        // Python SAM2: masks = masks[:, 1:, :, :], iou_pred = iou_pred[:, 1:]
+        // Mask 0 is the single-mask output; masks 1-3 are multi-mask candidates.
+        var (slicedMasks, slicedIou) = engine.SliceMultiMaskOutput(masks4d, decOut.IouPred);
+
+        float[,,,] resizedMasks = engine.PostprocessMasks(slicedMasks, imgHeight, imgWidth);
         bool[][,] boolMasks = engine.ConvertToBoolMasks(resizedMasks, 0.0f);
 
-        return (boolMasks, decOut.IouPred);
+        return (boolMasks, slicedIou);
     }
 
     // ---------------------------------------------------
@@ -167,7 +175,7 @@ public class Sam2Processor
     private static readonly Color32 DefaultMaskColor = new Color32(255, 0, 0, 255);
 
     /// <summary>
-    /// Overlay mask on pixels. Both must be in the same pixel order (B2T).
+    /// Overlay mask on pixels. Both must be in the same pixel order.
     /// Returns a new Color32[] with mask applied.
     /// </summary>
     public static Color32[] ApplyMaskOverlay(

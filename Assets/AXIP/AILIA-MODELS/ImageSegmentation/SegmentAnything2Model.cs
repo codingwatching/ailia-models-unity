@@ -113,8 +113,10 @@ public class SegmentAnything2Model
 
             if (result.HasMask)
             {
+                // Flip T2B mask to B2T for Unity's SetPixels32
+                bool[,] b2tMask = Sam2InferenceEngine.VerticalFlipMask(result.Mask);
                 Color32[] overlayPixels = Sam2Processor.ApplyMaskOverlay(
-                    result.B2TMask, image, imageWidth, imageHeight);
+                    b2tMask, image, imageWidth, imageHeight);
 
                 if (showClickPoints)
                 {
