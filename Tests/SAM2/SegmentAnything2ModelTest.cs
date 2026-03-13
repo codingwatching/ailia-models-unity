@@ -7,7 +7,7 @@
  *
  * Covers:
  *   - Click point / box management
- *   - ProcessEmbedding (B2T -> T2B flip + encode)
+ *   - ProcessEmbedding (T2B input -> encode)
  *   - ProcessMask (inference -> best mask in T2B format)
  *   - ApplyMaskOverlay (mask on pixels)
  *   - ConvertClickCoordsToB2T
@@ -245,9 +245,8 @@ public class SegmentAnything2ModelTest
         Assert.That(processor.EmbeddingExist(), Is.False);
 
         var (t2bPixels, imgW, imgH) = LoadPngTopToBottom(PNG_IMAGE_PATH);
-        Color32[] b2tPixels = SimulateUnityGetPixels32(t2bPixels, imgW, imgH);
 
-        processor.ProcessEmbedding(b2tPixels, imgW, imgH);
+        processor.ProcessEmbedding(t2bPixels, imgW, imgH);
 
         Assert.That(processor.EmbeddingExist(), Is.True);
     }
@@ -267,8 +266,7 @@ public class SegmentAnything2ModelTest
         using var _ = backend;
 
         var (t2bPixels, imgW, imgH) = LoadPngTopToBottom(PNG_IMAGE_PATH);
-        Color32[] b2tPixels = SimulateUnityGetPixels32(t2bPixels, imgW, imgH);
-        processor.ProcessEmbedding(b2tPixels, imgW, imgH);
+        processor.ProcessEmbedding(t2bPixels, imgW, imgH);
 
         var result = processor.ProcessMask(imgW, imgH);
         Assert.That(result.HasMask, Is.False);
@@ -290,10 +288,9 @@ public class SegmentAnything2ModelTest
         using var _ = backend;
 
         var (t2bPixels, imgW, imgH) = LoadPngTopToBottom(PNG_IMAGE_PATH);
-        Color32[] b2tPixels = SimulateUnityGetPixels32(t2bPixels, imgW, imgH);
 
-        // Step 1: Embedding (B2T input, like Unity)
-        processor.ProcessEmbedding(b2tPixels, imgW, imgH);
+        // Step 1: Embedding (T2B input)
+        processor.ProcessEmbedding(t2bPixels, imgW, imgH);
 
         // Step 2: Add click point (T2B coordinates)
         processor.AddClickPoint(500, 375);
@@ -450,19 +447,16 @@ public class SegmentAnything2ModelTest
         using var _ = backend;
 
         var (t2bPixels, imgW, imgH) = LoadPngTopToBottom(PNG_IMAGE_PATH);
-        Color32[] b2tPixels = SimulateUnityGetPixels32(t2bPixels, imgW, imgH);
 
-        processor.ProcessEmbedding(b2tPixels, imgW, imgH);
+        processor.ProcessEmbedding(t2bPixels, imgW, imgH);
         processor.AddClickPoint(500, 375);
         var result = processor.ProcessMask(imgW, imgH);
 
         Assert.That(result.HasMask, Is.True);
 
-        // Flip T2B mask to B2T to match B2T pixels (as Unity would do)
-        bool[,] b2tMask = Sam2InferenceEngine.VerticalFlipMask(result.Mask);
-
+        // Both mask and pixels are T2B, overlay directly
         Color32[] overlayPixels = Sam2Processor.ApplyMaskOverlay(
-            b2tMask, b2tPixels, imgW, imgH);
+            result.Mask, t2bPixels, imgW, imgH);
 
         // Verify alignment: unmasked pixels unchanged, masked pixels modified
         int unmaskedCorrect = 0, unmaskedTotal = 0;
@@ -474,20 +468,20 @@ public class SegmentAnything2ModelTest
             for (int x = 0; x < imgW; x++)
             {
                 int idx = rowOffset + x;
-                if (b2tMask[y, x])
+                if (result.Mask[y, x])
                 {
                     maskedTotal++;
-                    if (overlayPixels[idx].r != b2tPixels[idx].r ||
-                        overlayPixels[idx].g != b2tPixels[idx].g ||
-                        overlayPixels[idx].b != b2tPixels[idx].b)
+                    if (overlayPixels[idx].r != t2bPixels[idx].r ||
+                        overlayPixels[idx].g != t2bPixels[idx].g ||
+                        overlayPixels[idx].b != t2bPixels[idx].b)
                         maskedModified++;
                 }
                 else
                 {
                     unmaskedTotal++;
-                    if (overlayPixels[idx].r == b2tPixels[idx].r &&
-                        overlayPixels[idx].g == b2tPixels[idx].g &&
-                        overlayPixels[idx].b == b2tPixels[idx].b)
+                    if (overlayPixels[idx].r == t2bPixels[idx].r &&
+                        overlayPixels[idx].g == t2bPixels[idx].g &&
+                        overlayPixels[idx].b == t2bPixels[idx].b)
                         unmaskedCorrect++;
                 }
             }
@@ -516,9 +510,8 @@ public class SegmentAnything2ModelTest
         using var _ = backend;
 
         var (t2bPixels, imgW, imgH) = LoadPngTopToBottom(PNG_IMAGE_PATH);
-        Color32[] b2tPixels = SimulateUnityGetPixels32(t2bPixels, imgW, imgH);
 
-        processor.ProcessEmbedding(b2tPixels, imgW, imgH);
+        processor.ProcessEmbedding(t2bPixels, imgW, imgH);
         processor.AddClickPoint(500, 375);           // positive (truck)
         processor.AddClickPoint(1200, 100, true);     // negative (background)
 
@@ -547,9 +540,8 @@ public class SegmentAnything2ModelTest
         using var _ = backend;
 
         var (t2bPixels, imgW, imgH) = LoadPngTopToBottom(PNG_IMAGE_PATH);
-        Color32[] b2tPixels = SimulateUnityGetPixels32(t2bPixels, imgW, imgH);
 
-        processor.ProcessEmbedding(b2tPixels, imgW, imgH);
+        processor.ProcessEmbedding(t2bPixels, imgW, imgH);
         processor.SetBoxCoords(new Rect(150, 70, 1200, 900));
 
         var result = processor.ProcessMask(imgW, imgH);
@@ -578,31 +570,25 @@ public class SegmentAnything2ModelTest
         using var _ = backend;
 
         var (t2bPixels, imgW, imgH) = LoadPngTopToBottom(PNG_IMAGE_PATH);
-        Color32[] b2tPixels = SimulateUnityGetPixels32(t2bPixels, imgW, imgH);
 
-        processor.ProcessEmbedding(b2tPixels, imgW, imgH);
+        processor.ProcessEmbedding(t2bPixels, imgW, imgH);
         processor.AddClickPoint(500, 375);
 
         var result = processor.ProcessMask(imgW, imgH);
         Assert.That(result.HasMask, Is.True);
 
-        // Flip T2B mask to B2T for overlay on B2T pixels (as Unity would do)
-        bool[,] b2tMask = Sam2InferenceEngine.VerticalFlipMask(result.Mask);
-
-        // Full visualization: overlay + click points
+        // All T2B: overlay mask on T2B pixels, draw click points
         Color32[] overlayPixels = Sam2Processor.ApplyMaskOverlay(
-            b2tMask, b2tPixels, imgW, imgH);
+            result.Mask, t2bPixels, imgW, imgH);
 
-        float[,] t2bCoords = processor.GetClickPoints(imgH);
+        float[,] coords = processor.GetClickPoints(imgH);
         float[] labels = processor.GetPointLabels();
-        float[,] b2tCoords = Sam2Processor.ConvertClickCoordsToB2T(t2bCoords, imgH);
 
         Color32[] finalPixels = Sam2Processor.DrawClickPoints(
-            b2tCoords, labels, overlayPixels, imgW, imgH);
+            coords, labels, overlayPixels, imgW, imgH);
 
-        // The click point at B2T coords should have a green marker
-        int b2tClickY = imgH - 1 - 375;  // = 824
-        int markerIdx = b2tClickY * imgW + 500;
+        // The click point at T2B coords (500, 375) should have a green marker
+        int markerIdx = 375 * imgW + 500;
         Assert.That(finalPixels[markerIdx].g, Is.EqualTo(255),
             "Click point marker should be green");
 

@@ -214,11 +214,13 @@ namespace ailiaSDK
 				inputImageWidth = ailia_camera.GetWidth();
 				inputImageHeight = ailia_camera.GetHeight();
 				inputImage = ailia_camera.GetPixels32(); // Bottom2Top format
+				inputImage = VerticalFlip(inputImage, inputImageWidth, inputImageHeight); // Top2Bottom format
 			}else{
+				bool convert_to_top2bottom = true;
 				inputImageWidth = AiliaImageSource.Width;
 				inputImageHeight = AiliaImageSource.Height;
 				Rect rect = new Rect(0, 0, inputImageWidth, inputImageHeight);
-				inputImage = AiliaImageSource.GetPixels32(rect); // Bottom2Top format
+				inputImage = AiliaImageSource.GetPixels32(rect, convert_to_top2bottom); // Top2Bottom format
 			}
 
 			long end_time = DateTime.UtcNow.Ticks / TimeSpan.TicksPerMillisecond;
@@ -310,8 +312,8 @@ namespace ailiaSDK
 			labelTexture.Apply();
 			blendMaterial.SetTexture(blendTexId, labelTexture);
 
-			blendMaterial.SetFloat(mainVFlipId, 0);	//originalTexture is Bottom2Top
-			blendMaterial.SetFloat(blendVFlipId, 0);	//outputImage is Bottom2Top
+			blendMaterial.SetFloat(mainVFlipId, 1);	//originalTexture is Top2Bottom
+			blendMaterial.SetFloat(blendVFlipId, 1);	//outputImage is Top2Bottom
 
 
 			float rawImageRatio = rawImageSize.x / rawImageSize.y;
@@ -409,10 +411,9 @@ namespace ailiaSDK
             Vector3[] corners = new Vector3[4];
             raw_image.rectTransform.GetWorldCorners(corners);
 
-            // Use bottom-origin coordinates (same as Input.mousePosition)
             Rect rawImageRect = new Rect(
                 corners[0].x,
-                corners[0].y,
+                Screen.height - corners[2].y,
                 corners[2].x - corners[0].x,
                 corners[2].y - corners[0].y
             );
@@ -423,8 +424,6 @@ namespace ailiaSDK
             float heightRatio = raw_image.texture.height / rawImageRect.height;
 
             int x = Mathf.Clamp(Mathf.RoundToInt((mousePos.x - rawImageRect.x) * widthRatio), 0, raw_image.texture.width - 1);
-            // mousePos.y - corners[0].y: 0 at bottom, height at top (bottom-origin)
-            // Flip to T2B for AddClickPoint
             int y = raw_image.texture.height - 1 - Mathf.Clamp(Mathf.RoundToInt((mousePos.y - rawImageRect.y) * heightRatio), 0, raw_image.texture.height - 1);
 
             if (rawImageRect.Contains(mousePos))

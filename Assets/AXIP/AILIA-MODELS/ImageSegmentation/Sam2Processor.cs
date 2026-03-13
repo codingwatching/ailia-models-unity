@@ -6,7 +6,7 @@
  *
  * Handles:
  *   - Click point / box management
- *   - ProcessEmbedding: B2T -> T2B flip -> encode -> prepare features
+ *   - ProcessEmbedding: T2B image -> encode -> prepare features
  *   - ProcessMask: coords -> inference -> best mask (T2B output)
  *   - Mask overlay on Color32[] pixels
  *   - Click point visualization on Color32[] pixels
@@ -81,16 +81,10 @@ public class Sam2Processor
     public bool EmbeddingExist() => encoderOutput != null;
 
     /// <summary>
-    /// Compute embedding from B2T image (Unity native pixel order).
-    /// Internally flips B2T -> T2B for SAM2 inference.
+    /// Compute embedding from T2B image (top-to-bottom, SAM2 native format).
+    /// Caller is responsible for converting B2T to T2B before calling this.
     /// </summary>
-    public void ProcessEmbedding(Color32[] b2tImage, int imgWidth, int imgHeight)
-    {
-        Color32[] t2bImage = Sam2InferenceEngine.VerticalFlip(b2tImage, imgWidth, imgHeight);
-        RunEmbedding(t2bImage, imgWidth, imgHeight);
-    }
-
-    private void RunEmbedding(Color32[] t2bImage, int imgWidth, int imgHeight)
+    public void ProcessEmbedding(Color32[] t2bImage, int imgWidth, int imgHeight)
     {
         float[,,,] inputTensor = engine.PreprocessImage(t2bImage, imgWidth, imgHeight, targetSize);
         float[] nchwInput = engine.Flatten4D(inputTensor);

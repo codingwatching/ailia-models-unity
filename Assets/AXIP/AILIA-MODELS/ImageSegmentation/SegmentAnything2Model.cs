@@ -84,7 +84,7 @@ public class SegmentAnything2Model
         return modelsInitialized;
     }
 
-    // image : bottom-to-top format (Unity native)
+    // image : top-to-bottom format (SAM2 native)
     public void ProcessEmbedding(Color32[] image, int imageWidth, int imageHeight)
     {
         if (!modelsInitialized || isProcessing || isQuitting)
@@ -92,8 +92,8 @@ public class SegmentAnything2Model
         processor.ProcessEmbedding(image, imageWidth, imageHeight);
     }
 
-    // image : bottom-to-top format (Unity native)
-    // Output visualization is also bottom-to-top for SetPixels32
+    // image : top-to-bottom format (SAM2 native)
+    // Output visualization is also top-to-bottom
     public void ProcessMask(Color32[] image, int imageWidth, int imageHeight)
     {
         if (!modelsInitialized || isProcessing || isQuitting)
@@ -113,18 +113,15 @@ public class SegmentAnything2Model
 
             if (result.HasMask)
             {
-                // Flip T2B mask to B2T for Unity's SetPixels32
-                bool[,] b2tMask = Sam2InferenceEngine.VerticalFlipMask(result.Mask);
                 Color32[] overlayPixels = Sam2Processor.ApplyMaskOverlay(
-                    b2tMask, image, imageWidth, imageHeight);
+                    result.Mask, image, imageWidth, imageHeight);
 
                 if (showClickPoints)
                 {
-                    float[,] t2bCoords = processor.GetClickPoints(imageHeight);
+                    float[,] coords = processor.GetClickPoints(imageHeight);
                     float[] labels = processor.GetPointLabels();
-                    float[,] b2tCoords = Sam2Processor.ConvertClickCoordsToB2T(t2bCoords, imageHeight);
                     overlayPixels = Sam2Processor.DrawClickPoints(
-                        b2tCoords, labels, overlayPixels, imageWidth, imageHeight);
+                        coords, labels, overlayPixels, imageWidth, imageHeight);
                 }
 
                 visualizedResult = new Texture2D(imageWidth, imageHeight, TextureFormat.RGBA32, false);
