@@ -14,7 +14,8 @@ namespace ailiaSDK
 			lightweight_human_pose_estimation,
 			blazepose_fullbody,
 			mediapipe_pose_world_landmarks,
-			pose_resnet
+			pose_resnet,
+			e2pose
 		}
 
 		[SerializeField]
@@ -46,6 +47,7 @@ namespace ailiaSDK
 		[SerializeField]
 		private ComputeShader computeShaderBlazepose;
 		private AiliaPoseResnet ailia_pose_resnet;
+		private AiliaE2Pose ailia_e2pose;
 
 		private AiliaMediapipePoseWorldLandmarks ailia_mediapipepose;
 		[SerializeField]
@@ -132,6 +134,24 @@ namespace ailiaSDK
 					}));
 
 					break;
+				case PoseEstimatorModels.e2pose:
+					var e2pose_folder_path = "e2pose";
+					//var e2pose_model_name = "COCO_ResNet50_320x320";
+					var e2pose_model_name = "COCO_ResNet101_512x512";
+					//var e2pose_model_name = "COCO_ResNet152_448x448";
+					//var e2pose_model_name = "COCO_MobileNetV2_320x320";
+					//var e2pose_model_name = "COCO_MobileNetV2_448x512";
+					var pose_width = 512;
+					var pose_height = 512;
+					urlList.Add(new ModelDownloadURL() { folder_path = e2pose_folder_path, file_name = e2pose_model_name + ".onnx" });
+					urlList.Add(new ModelDownloadURL() { folder_path = e2pose_folder_path, file_name = e2pose_model_name + ".onnx.prototxt" });
+					StartCoroutine(ailia_download.DownloadWithProgressFromURL(urlList, () =>
+					{
+						ailia_e2pose = new AiliaE2Pose(gpu_mode, asset_path + "/" + e2pose_model_name + ".onnx.prototxt", asset_path + "/" + e2pose_model_name + ".onnx", pose_width, pose_height);
+						FileOpened = true;
+					}));
+
+					break;
 				default:
 					Debug.Log("Others ailia models are working in progress.");
 					break;
@@ -146,6 +166,7 @@ namespace ailiaSDK
 		// Use this for initialization
 		void Start()
 		{
+			AiliaLicense.CheckAndDownloadLicense();
 			mode_text.text = "ailia PoseEstimator";
 			SetUIProperties();
 			CreateAiliaPoseEstimator();
@@ -192,20 +213,28 @@ namespace ailiaSDK
 			//Pose estimation
 			long start_time = DateTime.UtcNow.Ticks / TimeSpan.TicksPerMillisecond;
 			List<AiliaPoseEstimator.AILIAPoseEstimatorObjectPose> pose=null;
+			string env_name = "";
 			List<AiliaPoseEstimator.AILIAPoseEstimatorObjectPose> pose_world=null;
 			if (ailiaModelType == PoseEstimatorModels.blazepose_fullbody)
 			{
 				pose = ailia_blazepose.RunPoseEstimation(camera, tex_width, tex_height);
+				env_name = ailia_blazepose.EnvironmentName();
 			}
 			else if (ailiaModelType == PoseEstimatorModels.mediapipe_pose_world_landmarks)
-            {
+			{
 				pose = ailia_mediapipepose.RunPoseEstimation(camera, tex_width, tex_height);
 				pose_world = ailia_mediapipepose.GetResult(true);
+				//env_name = ailia_mediapipepose.EnvironmentName(); // TODO
 			}
 			else if (ailiaModelType == PoseEstimatorModels.pose_resnet){
 				pose = ailia_pose_resnet.RunPoseEstimation(camera, tex_width, tex_height);
+				env_name = ailia_pose_resnet.EnvironmentName();
+			}else if (ailiaModelType == PoseEstimatorModels.e2pose){
+				pose = ailia_e2pose.RunPoseEstimation(camera, tex_width, tex_height);
+				env_name = ailia_e2pose.EnvironmentName();
 			}else{
 				pose = ailia_pose.ComputePoseFromImageB2T(camera, tex_width, tex_height);
+				env_name = ailia_pose.EnvironmentName();
 			}
 			long end_time = DateTime.UtcNow.Ticks / TimeSpan.TicksPerMillisecond; ;
 
@@ -306,7 +335,7 @@ namespace ailiaSDK
 
 			if (label_text != null)
 			{
-				label_text.text = "" + (end_time - start_time) + "ms\n" + ailia_pose.EnvironmentName();
+				label_text.text = "" + (end_time - start_time) + "ms\n" + env_name;
 			}
 		}
 
