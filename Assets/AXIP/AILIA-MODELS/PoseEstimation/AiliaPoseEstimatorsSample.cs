@@ -224,7 +224,7 @@ namespace ailiaSDK
 			{
 				pose = ailia_mediapipepose.RunPoseEstimation(camera, tex_width, tex_height);
 				pose_world = ailia_mediapipepose.GetResult(true);
-				//env_name = ailia_mediapipepose.EnvironmentName(); // TODO
+				env_name = ailia_mediapipepose.EnvironmentName();
 			}
 			else if (ailiaModelType == PoseEstimatorModels.pose_resnet){
 				pose = ailia_pose_resnet.RunPoseEstimation(camera, tex_width, tex_height);

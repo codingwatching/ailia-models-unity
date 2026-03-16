@@ -604,8 +604,9 @@ public class AiliaMediapipePoseWorldLandmarks : IDisposable
         return floatArray;
     }
 
-
-
+    public string EnvironmentName(){
+        return ailiaPoseDetection.EnvironmentName();
+    }
 
 
 
