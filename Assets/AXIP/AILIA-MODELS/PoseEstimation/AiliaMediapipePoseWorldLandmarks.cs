@@ -10,7 +10,8 @@ using ailia;
 public class AiliaMediapipePoseWorldLandmarks : IDisposable
 {
     AiliaMediapipePoseWorldLandmarksAnchors anchors_holder = new AiliaMediapipePoseWorldLandmarksAnchors();
-    
+    private MediapipePoseWorldEngine engine = new MediapipePoseWorldEngine();
+
     public ComputeShader computeShader = null;
 
     private AiliaModel ailiaPoseDetection = new AiliaModel();
@@ -113,8 +114,8 @@ public class AiliaMediapipePoseWorldLandmarks : IDisposable
 
         Texture2D letterboxed = TexturePreprocessor.PreprocessTexture(texture, preprocessBuffer, MEDIAPIPEPOSE_DETECTOR_INPUT_RESOLUTION * Vector2.one);
         Color32[] colorData = letterboxed.GetPixels32();
-        const float factor = 1 / 255f;
 
+        // Normalize to [-1, 1] range (matching Python: (pixel / 127.5) - 1.0)
         for (int heightIndex = 0; heightIndex < MEDIAPIPEPOSE_DETECTOR_INPUT_RESOLUTION; heightIndex++)
         {
             for (int widthIndex = 0; widthIndex < MEDIAPIPEPOSE_DETECTOR_INPUT_RESOLUTION; widthIndex++)
@@ -122,9 +123,9 @@ public class AiliaMediapipePoseWorldLandmarks : IDisposable
                 int index = (int)(((heightIndex * MEDIAPIPEPOSE_DETECTOR_INPUT_RESOLUTION) + widthIndex) * MEDIAPIPEPOSE_DETECTOR_INPUT_CHANNEL_COUNT);
                 Color32 value = colorData[(MEDIAPIPEPOSE_DETECTOR_INPUT_RESOLUTION - heightIndex - 1) * MEDIAPIPEPOSE_DETECTOR_INPUT_RESOLUTION + widthIndex];
 
-                inputArray[index + 0] = value.r * factor;
-                inputArray[index + 1] = value.g * factor;
-                inputArray[index + 2] = value.b * factor;
+                inputArray[index + 0] = value.r / 127.5f - 1.0f;
+                inputArray[index + 1] = value.g / 127.5f - 1.0f;
+                inputArray[index + 2] = value.b / 127.5f - 1.0f;
             }
         }
     }
@@ -189,7 +190,7 @@ public class AiliaMediapipePoseWorldLandmarks : IDisposable
         int kp1 = 0;
         int kp2 = 1;
         float theta0 = Mathf.PI / 2f;
-        float dscale = 1.1f;
+        float dscale = MediapipePoseWorldEngine.ROI_SCALE_FACTOR;
 
         float xc = scaledBox.keypoints[kp1].x;
         float yc = scaledBox.keypoints[kp1].y;
@@ -473,104 +474,50 @@ public class AiliaMediapipePoseWorldLandmarks : IDisposable
 
     private float Sigmoid(float x)
     {
-        return 1.0f / (1.0f + Mathf.Exp(-x));
+        return engine.Sigmoid(x);
     }
 
     private void DecodeAndProcessBoxes()
     {
-        List<Box> remainingBoxes = new List<Box>();
+        // Delegate to shared engine logic
+        var decodedBoxes = engine.DecodeAndProcessBoxes(rawBoxesOutput, rawScoresOutput, anchors);
+
+        // Convert DecodedBox to Box for Unity rendering pipeline
         boxes = new List<Box>();
-
-        float xScale = MEDIAPIPEPOSE_DETECTOR_INPUT_RESOLUTION;
-        float yScale = MEDIAPIPEPOSE_DETECTOR_INPUT_RESOLUTION;
-        float wScale = MEDIAPIPEPOSE_DETECTOR_INPUT_RESOLUTION;
-        float hScale = MEDIAPIPEPOSE_DETECTOR_INPUT_RESOLUTION;
-
-        Func<int, int, float> getFloat = (tI, cI) => rawBoxesOutput[tI * MEDIAPIPEPOSE_DETECTOR_TENSOR_SIZE + cI];
-
-        for (int tI = 0; tI < MEDIAPIPEPOSE_DETECTOR_TENSOR_COUNT; ++tI)
+        foreach (var db in decodedBoxes)
         {
-            float score = Sigmoid(Mathf.Clamp(rawScoresOutput[tI], -MEDIAPIPEPOSE_DETECTOR_RAW_SCORE_THRESHOLD, MEDIAPIPEPOSE_DETECTOR_RAW_SCORE_THRESHOLD));
+            Vector2[] kps = new Vector2[MediapipePoseWorldEngine.DETECTOR_KEYPOINT_COUNT];
+            for (int k = 0; k < kps.Length; k++)
+                kps[k] = new Vector2(db.keypoints[k][0], db.keypoints[k][1]);
 
-            if (score < MEDIAPIPEPOSE_DETECTOR_MINIMUM_SCORE_THRESHOLD)
+            boxes.Add(new Box
             {
-                continue;
-            }
-
-            float xCenter = getFloat(tI, 0) / xScale * anchors[tI, 2] + anchors[tI, 0];
-            float yCenter = getFloat(tI, 1) / yScale * anchors[tI, 3] + anchors[tI, 1];
-            float width = getFloat(tI, 2) / wScale * anchors[tI, 2];
-            float height = getFloat(tI, 3) / hScale * anchors[tI, 3];
-
-            Vector2[] keypoints = new Vector2[MEDIAPIPEPOSE_DETECTOR_KEYPOINT_COUNT];
-
-            for (int i = 0; i < MEDIAPIPEPOSE_DETECTOR_KEYPOINT_COUNT; ++i)
-            {
-                int index = 4 + 2 * i;
-                keypoints[i] = new Vector2(
-                    getFloat(tI, index) / xScale * anchors[tI, 2] + anchors[tI, 0],
-                    getFloat(tI, index + 1) / yScale * anchors[tI, 3] + anchors[tI, 1]
-                );
-            }
-
-            remainingBoxes.Add(new Box
-            {
-                xMin = xCenter - width / 2,
-                yMin = yCenter - height / 2,
-                xMax = xCenter + width / 2,
-                yMax = yCenter + height / 2,
-                keypoints = keypoints,
-                area = width * height,
-                score = score
+                xMin = db.xMin,
+                yMin = db.yMin,
+                xMax = db.xMax,
+                yMax = db.yMax,
+                keypoints = kps,
+                area = db.area,
+                score = db.score
             });
-        }
-
-        remainingBoxes.Sort((a, b) => Math.Sign(b.score - a.score));
-
-        while (remainingBoxes.Count > 0)
-        {
-            Box referenceBox = remainingBoxes[0];
-            Box mergedBox = referenceBox;
-            remainingBoxes.RemoveAt(0);
-
-            for (int i = 0; i < remainingBoxes.Count; ++i)
-            {
-                if (referenceBox.GetJaccardOverlap(remainingBoxes[i]) > MEDIAPIPEPOSE_DETECTOR_MINIMUM_OVERLAP_THRESHOLD)
-                {
-                    mergedBox.Merge(remainingBoxes[i]);
-                    remainingBoxes.RemoveAt(i);
-                    --i;
-                }
-            }
-
-            mergedBox.FinalizeMerge();
-            boxes.Add(mergedBox);
         }
     }
 
     private void DecodeAndProcessLandmarks()
     {
+        // Delegate to shared engine logic
+        var decoded = engine.DecodeLandmarks(estimationOutputBuffer);
+
+        // Convert PoseLandmarkResult to Landmark for Unity rendering pipeline
         landmarks = new List<Landmark>();
-
-        for (int i = 0; i < 33; ++i)
+        for (int i = 0; i < decoded.Length; i++)
         {
-            float x = estimationOutputBuffer[i * 5] / MEDIAPIPEPOSE_ESTIMATOR_INPUT_RESOLUTION;
-            float y = estimationOutputBuffer[i * 5 + 1] / MEDIAPIPEPOSE_ESTIMATOR_INPUT_RESOLUTION;
-            float z = estimationOutputBuffer[i * 5 + 2] / MEDIAPIPEPOSE_ESTIMATOR_INPUT_RESOLUTION;
-            float visibility = estimationOutputBuffer[i * 5 + 3];
-            float presence = estimationOutputBuffer[i * 5 + 4];
-
             landmarks.Add(new Landmark
             {
-                position = new Vector3(x, y, z),
-                confidence = Sigmoid(Math.Min(visibility, presence))
-            }); ;
-
-            //Debug.Log("i = " + i + ":landmarks[i].position " + landmarks[i].position);//デバック
+                position = new Vector3(decoded[i].X, decoded[i].Y, decoded[i].Z),
+                confidence = decoded[i].Confidence
+            });
         }
-
-        //Debug.Log(landmarks[0].position);//デバック->(0.5, 0.2, -0.9)
-        //Debug.Log(landmarks.Count);//デバック->33
     }
 
     public List<AiliaPoseEstimator.AILIAPoseEstimatorObjectPose> GetResult(bool world_cordinate)

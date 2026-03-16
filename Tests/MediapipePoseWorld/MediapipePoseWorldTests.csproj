@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
+    <ImplicitUsings>disable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 
@@ -16,10 +16,24 @@
     <PackageReference Include="NUnit" Version="3.14.0" />
     <PackageReference Include="NUnit.Analyzers" Version="3.9.0" />
     <PackageReference Include="NUnit3TestAdapter" Version="4.5.0" />
+    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.2" />
   </ItemGroup>
 
   <ItemGroup>
     <Using Include="NUnit.Framework" />
+  </ItemGroup>
+
+  <!-- Shared source files from the main project -->
+  <ItemGroup>
+    <Compile Include="../../Assets/AXIP/AILIA-MODELS/PoseEstimation/MediapipePoseWorldEngine.cs" Link="Shared/MediapipePoseWorldEngine.cs" />
+    <Compile Include="../../Assets/AXIP/AILIA-MODELS/PoseEstimation/AiliaMediapipePoseWorldLamdmarksAnchors.cs" Link="Shared/AiliaMediapipePoseWorldLamdmarksAnchors.cs" />
+  </ItemGroup>
+
+  <!-- ailia SDK source files -->
+  <ItemGroup>
+    <Compile Include="/tmp/ailia-csharp/ailia-csharp/ailia-csharp/ailia/ailia-sdk-unity/Runtime/Api/Ailia.cs" Link="AiliaSDK/Ailia.cs" />
+    <Compile Include="/tmp/ailia-csharp/ailia-csharp/ailia-csharp/ailia/ailia-sdk-unity/Runtime/Models/AiliaModel.cs" Link="AiliaSDK/AiliaModel.cs" />
+    <Compile Include="/tmp/ailia-csharp/ailia-csharp/ailia-csharp/ailia/ailia-sdk-unity/Runtime/Models/AiliaLicense.cs" Link="AiliaSDK/AiliaLicense.cs" />
   </ItemGroup>
 
 </Project>

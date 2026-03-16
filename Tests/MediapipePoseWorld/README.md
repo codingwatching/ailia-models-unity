@@ -5,47 +5,62 @@
 These tests verify that the C# MediaPipe Pose World Landmarks processing logic
 produces results consistent with the Python reference implementation.
 
+## Architecture
+
+The test project shares the `MediapipePoseWorldEngine.cs` from the main Unity project
+via `<Compile Include>` linking (same pattern as SAM2 tests). This ensures
+the exact same code runs in both Unity and standalone test environments.
+
 ## Test Structure
 
 | File | Description |
 |------|-------------|
-| `PythonComparisonTest.cs` | C# NUnit tests comparing against Python ground truth |
-| `MediapipePoseWorldProcessor.cs` | Testable pure logic extracted from Unity implementation |
-| `generate_mediapipe_reference.py` | Python script to generate reference values |
+| `MediapipePoseInferenceTest.cs` | E2E inference tests comparing C# engine vs Python reference |
+| `PythonComparisonTest.cs` | Unit tests for individual processing steps (sigmoid, boxes, landmarks) |
+| `MediapipePoseWorldProcessor.cs` | Standalone processor for unit-level comparison tests |
+| `generate_e2e_reference.py` | Python script to generate E2E reference values (using onnxruntime) |
+| `generate_mediapipe_reference.py` | Python script to generate unit test reference values |
 | `MediapipePoseWorldTests.csproj` | .NET 8.0 test project configuration |
 
 ## Processing Steps Validated
 
-1. **Sigmoid activation**: `1 / (1 + exp(-x))`
-2. **Pixel normalization**: `value / 255.0`
-3. **Box decoding**: Raw SSD outputs + anchors → bounding boxes
-4. **Non-maximum suppression (NMS)**: Overlapping box merging
+1. **Detection preprocessing**: Letterbox resize + [-1,1] normalization
+2. **Box decoding**: Raw SSD outputs + anchors → bounding boxes with padding correction
+3. **Weighted NMS**: Overlapping box merging (exact match with Python)
+4. **ROI extraction**: Perspective warp with rotation, dscale=1.25
 5. **Landmark decoding**: 195-value buffer → 33 landmarks (x, y, z, visibility, presence)
-6. **Affine inverse coordinate transform**: ROI space → image space
-7. **Derived keypoints**: Shoulder center, body center
+6. **Coordinate transform**: ROI space → image space via inverse rotation+scale+translate
 
 ## Running Tests
 
 ### Prerequisites
 
 - .NET 8.0 SDK
-- Python 3.x with NumPy (for regenerating reference values)
+- Python 3.x with NumPy, OpenCV, onnxruntime (for regenerating reference values)
+- ailia SDK native library (for E2E inference tests only)
 
-### Run C# Tests
+### Step 1: Generate Python Reference Values
 
 ```bash
 cd Tests/MediapipePoseWorld
-dotnet test
+PYTHONPATH=/tmp/ailia-models/util:/tmp/ailia-models/pose_estimation_3d/mediapipe_pose_world_landmarks \
+  python3 generate_e2e_reference.py
 ```
 
-### Regenerate Python Reference Values
+### Step 2: Run C# Tests
 
 ```bash
-python generate_mediapipe_reference.py
+cd Tests/MediapipePoseWorld
+LD_LIBRARY_PATH=/tmp/ailia-csharp/.../Runtime/Plugins/linux dotnet test
 ```
+
+Note: The E2E inference test (`TestFullPipeline_E2E`) requires an ailia SDK license.
+It will be skipped automatically if the license is not available. All other tests
+use pre-generated Python reference data and do not require the ailia runtime.
 
 ## Tolerance
 
-- C# uses `float32`, Python uses `float64` by default
-- Tolerance: `1e-4` for most comparisons (accounts for float32 precision)
-- Sigmoid: `1e-6` tolerance (simple function, high precision)
+- Box decoding: `1e-3` (exact match with Python)
+- ROI parameters: `0.5` for center/size, `0.01` for rotation
+- Landmark positions: `0.05` (accounts for heatmap refinement difference)
+- Sigmoid: `1e-6`
