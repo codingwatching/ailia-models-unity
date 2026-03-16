@@ -833,16 +833,33 @@ public class AiliaMediapipePoseBackend : IMediapipePoseBackend
         return detector?.EnvironmentName() ?? "";
     }
 
+    /// <summary>Convert HWC float array to CHW layout for ONNX models.</summary>
+    private static float[] HwcToChw(float[] hwcData, int width, int height, int channels)
+    {
+        float[] chw = new float[hwcData.Length];
+        for (int c = 0; c < channels; c++)
+            for (int y = 0; y < height; y++)
+                for (int x = 0; x < width; x++)
+                    chw[c * height * width + y * width + x] = hwcData[(y * width + x) * channels + c];
+        return chw;
+    }
+
     public DetectorOutput RunDetector(float[] inputData, int width, int height, int channels)
     {
         int inputBlobIndex = detector.FindBlobIndexByName("input_1");
 
-        detector.SetInputBlobShape(new ailia.Ailia.AILIAShape
-        {
-            x = (uint)channels, y = (uint)width, z = (uint)height, w = 1, dim = 4
-        }, inputBlobIndex);
+        // Convert HWC input to CHW for ONNX model (NCHW format)
+        float[] chwData = HwcToChw(inputData, width, height, channels);
 
-        detector.SetInputBlobData(inputData, inputBlobIndex);
+        // ailia shape: x=W, y=H, z=C, w=N
+        if (!detector.SetInputBlobShape(new ailia.Ailia.AILIAShape
+        {
+            x = (uint)width, y = (uint)height, z = (uint)channels, w = 1, dim = 4
+        }, inputBlobIndex))
+            throw new Exception("SetInputBlobShape failed for detector");
+
+        if (!detector.SetInputBlobData(chwData, inputBlobIndex))
+            throw new Exception("SetInputBlobData failed for detector");
 
         if (!detector.Update())
             throw new Exception("Detector inference failed: " + detector.GetErrorDetail());
@@ -864,12 +881,18 @@ public class AiliaMediapipePoseBackend : IMediapipePoseBackend
     {
         int inputBlobIndex = estimator.FindBlobIndexByName("input_1");
 
-        estimator.SetInputBlobShape(new ailia.Ailia.AILIAShape
-        {
-            x = (uint)channels, y = (uint)width, z = (uint)height, w = 1, dim = 4
-        }, inputBlobIndex);
+        // Convert HWC input to CHW for ONNX model (NCHW format)
+        float[] chwData = HwcToChw(inputData, width, height, channels);
 
-        estimator.SetInputBlobData(inputData, inputBlobIndex);
+        // ailia shape: x=W, y=H, z=C, w=N
+        if (!estimator.SetInputBlobShape(new ailia.Ailia.AILIAShape
+        {
+            x = (uint)width, y = (uint)height, z = (uint)channels, w = 1, dim = 4
+        }, inputBlobIndex))
+            throw new Exception("SetInputBlobShape failed for estimator");
+
+        if (!estimator.SetInputBlobData(chwData, inputBlobIndex))
+            throw new Exception("SetInputBlobData failed for estimator");
 
         if (!estimator.Update())
             throw new Exception("Estimator inference failed: " + estimator.GetErrorDetail());

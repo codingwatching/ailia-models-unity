@@ -2,11 +2,16 @@
 """
 Generate E2E reference values for MediaPipe Pose World Landmarks.
 
-Runs the full pipeline on a test image using onnxruntime and saves
+Runs the full pipeline on a test image using ailia SDK and saves
 intermediate/final values as .npy files for C# comparison.
 
 Usage:
     python generate_e2e_reference.py [--image PATH] [--model_dir PATH] [--output_dir PATH]
+
+Prerequisites:
+    - ailia SDK (Python): pip install ailia
+    - ailia license: curl -o ~/.shalo/AILIA.lic https://axip-console.appspot.com/license/download/product/AILIA
+    - NumPy, OpenCV
 """
 
 import sys
@@ -17,6 +22,8 @@ from collections import namedtuple
 
 import cv2
 import numpy as np
+
+import ailia
 
 # Add ailia-models util path for helper functions
 AILIA_MODELS_DIR = '/tmp/ailia-models'
@@ -147,8 +154,6 @@ def refine_landmark_from_heatmap(landmarks, heatmap):
 
 
 def run_pipeline(image_path, model_dir, output_dir):
-    import onnxruntime as ort
-
     os.makedirs(output_dir, exist_ok=True)
 
     # Load image
@@ -164,7 +169,18 @@ def run_pipeline(image_path, model_dir, output_dir):
     np.save(os.path.join(output_dir, 'image_shape.npy'), np.array([im_h, im_w]))
 
     # ========================================
-    # Step 1: Preprocess for detection
+    # Step 1: Load models with ailia SDK
+    # ========================================
+    det_net = ailia.Net(
+        os.path.join(model_dir, 'pose_detection.onnx.prototxt'),
+        os.path.join(model_dir, 'pose_detection.onnx'))
+    est_net = ailia.Net(
+        os.path.join(model_dir, 'pose_landmark_heavy.onnx.prototxt'),
+        os.path.join(model_dir, 'pose_landmark_heavy.onnx'))
+    print("ailia models loaded")
+
+    # ========================================
+    # Step 2: Preprocess for detection
     # ========================================
     det_input, pad, det_img_warped = preprocess_detection(img_rgb)
     np.save(os.path.join(output_dir, 'det_input.npy'), det_input)
@@ -173,17 +189,16 @@ def run_pipeline(image_path, model_dir, output_dir):
     print(f"Detection input shape: {det_input.shape}, pad: {pad}")
 
     # ========================================
-    # Step 2: Run detector
+    # Step 3: Run detector with ailia
     # ========================================
-    det_session = ort.InferenceSession(os.path.join(model_dir, 'pose_detection.onnx'))
-    det_outputs = det_session.run(None, {'input_1': det_input})
+    det_outputs = det_net.predict([det_input])
     detections, scores = det_outputs
     np.save(os.path.join(output_dir, 'det_raw_boxes.npy'), detections)
     np.save(os.path.join(output_dir, 'det_raw_scores.npy'), scores)
     print(f"Detector outputs: boxes={detections.shape}, scores={scores.shape}")
 
     # ========================================
-    # Step 3: Decode boxes (using reference detection_utils)
+    # Step 4: Decode boxes (using reference detection_utils)
     # ========================================
     box, score = pose_detection(detections, scores, pad)
     if len(box) == 0:
@@ -197,7 +212,7 @@ def run_pipeline(image_path, model_dir, output_dir):
     print(f"Detection score: {score}")
 
     # ========================================
-    # Step 4: Compute ROI parameters
+    # Step 5: Compute ROI parameters
     # ========================================
     x_center_kp, y_center_kp = box[4:6]
     x_scale_kp, y_scale_kp = box[6:8]
@@ -219,7 +234,7 @@ def run_pipeline(image_path, model_dir, output_dir):
     print(f"ROI: center=({x_center:.1f}, {y_center:.1f}), box_size={box_size:.1f}, rotation={rotation:.4f}")
 
     # ========================================
-    # Step 5: Preprocess for landmark estimation
+    # Step 6: Preprocess for landmark estimation
     # ========================================
     lmk_input, M = preprocess_landmark(img_rgb, center, box_size, rotation)
     np.save(os.path.join(output_dir, 'lmk_input.npy'), lmk_input)
@@ -227,10 +242,9 @@ def run_pipeline(image_path, model_dir, output_dir):
     print(f"Landmark input shape: {lmk_input.shape}")
 
     # ========================================
-    # Step 6: Run landmark estimator
+    # Step 7: Run landmark estimator with ailia
     # ========================================
-    est_session = ort.InferenceSession(os.path.join(model_dir, 'pose_landmark_heavy.onnx'))
-    est_outputs = est_session.run(None, {'input_1': lmk_input})
+    est_outputs = est_net.predict([lmk_input])
     landmark_tensor = est_outputs[0]
     pose_flag_tensor = est_outputs[1]
     segmentation_tensor = est_outputs[2]
@@ -244,7 +258,7 @@ def run_pipeline(image_path, model_dir, output_dir):
     print(f"Pose score: {pose_flag_tensor[0, 0]:.4f}")
 
     # ========================================
-    # Step 7: Decode landmarks
+    # Step 8: Decode landmarks
     # ========================================
     raw_landmarks = to_landmark(landmark_tensor)
     all_world_landmarks = to_landmark(world_landmark_tensor)
@@ -264,7 +278,7 @@ def run_pipeline(image_path, model_dir, output_dir):
     np.save(os.path.join(output_dir, 'world_landmarks_raw.npy'), all_world_landmarks)
 
     # ========================================
-    # Step 8: Transform landmarks to image coordinates
+    # Step 9: Transform landmarks to image coordinates
     # ========================================
     cosa = math.cos(rotation)
     sina = math.sin(rotation)
@@ -288,7 +302,7 @@ def run_pipeline(image_path, model_dir, output_dir):
     np.save(os.path.join(output_dir, 'world_landmarks_transformed.npy'), world_landmarks_transformed)
 
     # ========================================
-    # Step 9: Print final results for validation
+    # Step 10: Print final results for validation
     # ========================================
     print("\n=== Final Landmarks (Image Coordinates, first 10) ===")
     body_parts = ['Nose', 'L_InnerEye', 'L_Eye', 'L_OuterEye', 'R_InnerEye',
