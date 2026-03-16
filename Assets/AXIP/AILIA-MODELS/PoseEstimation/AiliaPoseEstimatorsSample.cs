@@ -221,9 +221,10 @@ namespace ailiaSDK
 				env_name = ailia_blazepose.EnvironmentName();
 			}
 			else if (ailiaModelType == PoseEstimatorModels.mediapipe_pose_world_landmarks)
-            {
+			{
 				pose = ailia_mediapipepose.RunPoseEstimation(camera, tex_width, tex_height);
 				pose_world = ailia_mediapipepose.GetResult(true);
+				//env_name = ailia_mediapipepose.EnvironmentName(); // TODO
 			}
 			else if (ailiaModelType == PoseEstimatorModels.pose_resnet){
 				pose = ailia_pose_resnet.RunPoseEstimation(camera, tex_width, tex_height);
