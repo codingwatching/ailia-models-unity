@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
+    <PackageReference Include="NUnit" Version="3.14.0" />
+    <PackageReference Include="NUnit.Analyzers" Version="3.9.0" />
+    <PackageReference Include="NUnit3TestAdapter" Version="4.5.0" />
+    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="NUnit.Framework" />
+  </ItemGroup>
+
+  <!-- Shared files from ImageSegmentation (same logic as Unity) -->
+  <ItemGroup>
+    <Compile Include="../../Assets/AXIP/AILIA-MODELS/ImageSegmentation/Sam2InferenceEngine.cs" Link="Shared/Sam2InferenceEngine.cs" />
+    <Compile Include="../../Assets/AXIP/AILIA-MODELS/ImageSegmentation/Sam2Processor.cs" Link="Shared/Sam2Processor.cs" />
+  </ItemGroup>
+
+  <!-- ailia SDK wrapper files (from ailia-csharp repo) -->
+  <ItemGroup>
+    <Compile Include="/tmp/ailia-csharp/ailia-csharp/ailia-csharp/ailia/ailia-sdk-unity/Runtime/Api/Ailia.cs" Link="AiliaSDK/Ailia.cs" />
+    <Compile Include="/tmp/ailia-csharp/ailia-csharp/ailia-csharp/ailia/ailia-sdk-unity/Runtime/Models/AiliaModel.cs" Link="AiliaSDK/AiliaModel.cs" />
+    <Compile Include="/tmp/ailia-csharp/ailia-csharp/ailia-csharp/ailia/ailia-sdk-unity/Runtime/Models/AiliaLicense.cs" Link="AiliaSDK/AiliaLicense.cs" />
+  </ItemGroup>
+
+</Project>
