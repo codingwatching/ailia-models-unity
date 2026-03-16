@@ -758,6 +758,9 @@ public class MediapipePoseWorldEngine
         return result;
     }
 
+    // Last detected box (for frame-to-frame caching)
+    public DecodedBox? LastDetectedBox { get; set; }
+
     // -------------------------------------------------------
     // Full pipeline: detect + estimate (for E2E testing)
     // -------------------------------------------------------
@@ -765,28 +768,42 @@ public class MediapipePoseWorldEngine
         IMediapipePoseBackend backend,
         Color32[] pixels, int width, int height,
         float[,] anchors,
-        bool worldCoordinate = true)
+        bool worldCoordinate = true,
+        DecodedBox? cachedDetection = null)
     {
-        // Step 1: Preprocess for detection
-        float padH, padW;
-        float[] detInput = PreprocessDetection(pixels, width, height, out padH, out padW);
+        DecodedBox detectionBox;
 
-        // Step 2: Run detector
-        var detOutput = backend.RunDetector(detInput,
-            DETECTOR_INPUT_RESOLUTION, DETECTOR_INPUT_RESOLUTION, DETECTOR_INPUT_CHANNEL_COUNT);
-
-        // Step 3: Decode boxes with padding correction
-        var boxes = DecodeAndProcessBoxes(detOutput.RawBoxes, detOutput.RawScores, anchors, padH, padW);
-        if (boxes.Count == 0)
+        if (cachedDetection.HasValue)
         {
-            Debug.Log("No pose detected");
-            return null;
+            detectionBox = cachedDetection.Value;
+        }
+        else
+        {
+            // Step 1: Preprocess for detection
+            float padH, padW;
+            float[] detInput = PreprocessDetection(pixels, width, height, out padH, out padW);
+
+            // Step 2: Run detector
+            var detOutput = backend.RunDetector(detInput,
+                DETECTOR_INPUT_RESOLUTION, DETECTOR_INPUT_RESOLUTION, DETECTOR_INPUT_CHANNEL_COUNT);
+
+            // Step 3: Decode boxes with padding correction
+            var boxes = DecodeAndProcessBoxes(detOutput.RawBoxes, detOutput.RawScores, anchors, padH, padW);
+            if (boxes.Count == 0)
+            {
+                Debug.Log("No pose detected");
+                LastDetectedBox = null;
+                return null;
+            }
+
+            Debug.Log($"Detected {boxes.Count} pose(s), best score={boxes[0].score:F4}");
+            detectionBox = boxes[0];
         }
 
-        Debug.Log($"Detected {boxes.Count} pose(s), best score={boxes[0].score:F4}");
+        LastDetectedBox = detectionBox;
 
         // Step 4: Extract ROI
-        var (roiInput, roiW, roiH) = ExtractROI(pixels, width, height, boxes[0]);
+        var (roiInput, roiW, roiH) = ExtractROI(pixels, width, height, detectionBox);
 
         // Step 5: Run estimator
         var estOutput = backend.RunEstimator(roiInput, roiW, roiH, DETECTOR_INPUT_CHANNEL_COUNT);
@@ -811,11 +828,23 @@ public class AiliaMediapipePoseBackend : IMediapipePoseBackend
 {
     private ailia.AiliaModel detector;
     private ailia.AiliaModel estimator;
+    private bool gpuMode;
+
+    public AiliaMediapipePoseBackend(bool gpuMode = false)
+    {
+        this.gpuMode = gpuMode;
+    }
 
     public void LoadModels(string detectorPath, string estimatorPath)
     {
         detector = new ailia.AiliaModel();
         estimator = new ailia.AiliaModel();
+
+        if (gpuMode)
+        {
+            detector.Environment(ailia.Ailia.AILIA_ENVIRONMENT_TYPE_GPU);
+            estimator.Environment(ailia.Ailia.AILIA_ENVIRONMENT_TYPE_GPU);
+        }
 
         string detProto = detectorPath + ".prototxt";
         string estProto = estimatorPath + ".prototxt";

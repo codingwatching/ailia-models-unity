@@ -1,226 +1,223 @@
-﻿using ailiaSDK;
+using ailiaSDK;
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using UnityEngine;
 
 using ailia;
 
 public class AiliaMediapipePoseWorldLandmarks : IDisposable
 {
-    AiliaMediapipePoseWorldLandmarksAnchors anchors_holder = new AiliaMediapipePoseWorldLandmarksAnchors();
     private MediapipePoseWorldEngine engine = new MediapipePoseWorldEngine();
-
-    public ComputeShader computeShader = null;
-
-    private AiliaModel ailiaPoseDetection = new AiliaModel();
-    private AiliaModel ailiaPoseEstimation = new AiliaModel();
-
-    private static readonly int MEDIAPIPEPOSE_DETECTOR_INPUT_RESOLUTION = 224;
-    private static readonly uint MEDIAPIPEPOSE_DETECTOR_INPUT_CHANNEL_COUNT = 3;
-    private static readonly uint MEDIAPIPEPOSE_DETECTOR_TENSOR_COUNT = 2254;
-    private static readonly uint MEDIAPIPEPOSE_DETECTOR_TENSOR_SIZE = 12;
-    public static readonly uint MEDIAPIPEPOSE_DETECTOR_KEYPOINT_COUNT = 4;
-    private static readonly float MEDIAPIPEPOSE_DETECTOR_RAW_SCORE_THRESHOLD = 100;
-    private static readonly float MEDIAPIPEPOSE_DETECTOR_MINIMUM_SCORE_THRESHOLD = 0.5f;
-    private static readonly float MEDIAPIPEPOSE_DETECTOR_MINIMUM_OVERLAP_THRESHOLD = 0.3f;
+    private AiliaMediapipePoseBackend backend;
     private float[,] anchors;
 
-    private static readonly int MEDIAPIPEPOSE_ESTIMATOR_INPUT_RESOLUTION = 256;
-    private static readonly int MEDIAPIPEPOSE_ESTIMATOR_TENSOR_COUNT = 1;
-    private static readonly int MEDIAPIPEPOSE_ESTIMATOR_TENSOR_SIZE = 195;
+    // GPU ROI extraction (Unity-specific)
+    public ComputeShader computeShader = null;
+    private int kernelIndex = -1;
+    private int ID_InputTexture = Shader.PropertyToID("InputTexture");
+    private int ID_InputWidth = Shader.PropertyToID("InputWidth");
+    private int ID_InputHeight = Shader.PropertyToID("InputHeight");
+    private int ID_OutputTexture = Shader.PropertyToID("OutputTexture");
+    private int ID_OutputWidth = Shader.PropertyToID("OutputWidth");
+    private int ID_OutputHeight = Shader.PropertyToID("OutputHeight");
+    private int ID_Matrix = Shader.PropertyToID("Matrix");
+    private int ID_BackgroundColor = Shader.PropertyToID("BackgroundColor");
+    private RenderTexture computeTexture;
+    private Texture2D roiTexture;
+    private RenderTexture preprocessBuffer;
+    private Texture2D input_texture;
 
-    int kernelIndex = -1;
-    int ID_InputTexture = Shader.PropertyToID("InputTexture");
-    int ID_InputWidth = Shader.PropertyToID("InputWidth");
-    int ID_InputHeight = Shader.PropertyToID("InputHeight");
-    int ID_OutputTexture = Shader.PropertyToID("OutputTexture");
-    int ID_OutputWidth = Shader.PropertyToID("OutputWidth");
-    int ID_OutputHeight = Shader.PropertyToID("OutputHeight");
-    int ID_Matrix = Shader.PropertyToID("Matrix");
-    int ID_BackgroundColor = Shader.PropertyToID("BackgroundColor");
+    // Detection caching (skip re-detection after first frame)
+    private MediapipePoseWorldEngine.DecodedBox? cachedDetectionBox;
 
-    struct JsonFloatArray
-    {
-        public float[] array;
-    }
+    // Image dimensions for GetResult
+    private int imageWidth;
+    private int imageHeight;
 
-    //constructor
     public AiliaMediapipePoseWorldLandmarks(bool gpuMode, string assetPath, string jsonPath)
     {
-        bool status;
+        backend = new AiliaMediapipePoseBackend(gpuMode);
+        backend.LoadModels(
+            $"{assetPath}/pose_detection.onnx",
+            $"{assetPath}/pose_landmark_heavy.onnx"
+        );
 
-        if (gpuMode)
-        {
-            ailiaPoseDetection.Environment(Ailia.AILIA_ENVIRONMENT_TYPE_GPU);
-        }
-        string modelName = "pose_detection";
-        status = ailiaPoseDetection.OpenFile($"{assetPath}/{modelName}.onnx.prototxt", $"{assetPath}/{modelName}.onnx");
-        if (status == false)
-        {
-            string message = $"Could not load model {modelName}";
-            Debug.LogError(message);
-            throw new Exception(message);
-        }
-        Debug.Log($"Model loaded {modelName}");
-
-        if (gpuMode)
-        {
-            ailiaPoseEstimation.Environment(Ailia.AILIA_ENVIRONMENT_TYPE_GPU);
-        }
-        modelName = "pose_landmark_heavy";
-        status = ailiaPoseEstimation.OpenFile($"{assetPath}/{modelName}.onnx.prototxt", $"{assetPath}/{modelName}.onnx");
-        if (status == false)
-        {
-            string message = $"Could not load model {modelName}";
-            Debug.LogError(message);
-            throw new Exception(message);
-        }
-        Debug.Log($"Model loaded {modelName}");
-
-        // string anchorsJSON = File.ReadAllText($"{jsonPath}/mediapipepose_anchors.json");
-        // float[] anchorsFlat = JsonUtility.FromJson<JsonFloatArray>($"{{ \"array\": {anchorsJSON} }}").array;
-        float[] anchorsFlat = ConvertDoubleArrayToFloatArray(anchors_holder.anchors);
-
-        anchors = new float[MEDIAPIPEPOSE_DETECTOR_TENSOR_COUNT, 4];
-
+        // Load anchors
+        var anchorsHolder = new AiliaMediapipePoseWorldLandmarksAnchors();
+        float[] anchorsFlat = ConvertDoubleArrayToFloatArray(anchorsHolder.anchors);
+        anchors = new float[MediapipePoseWorldEngine.DETECTOR_TENSOR_COUNT, 4];
         for (int i = 0; i < anchorsFlat.Length; ++i)
         {
             anchors[i / 4, i % 4] = anchorsFlat[i];
         }
-
-        inputArray = new float[MEDIAPIPEPOSE_DETECTOR_INPUT_RESOLUTION * MEDIAPIPEPOSE_DETECTOR_INPUT_RESOLUTION * MEDIAPIPEPOSE_DETECTOR_INPUT_CHANNEL_COUNT];
-        rawBoxesOutput = new float[MEDIAPIPEPOSE_DETECTOR_TENSOR_COUNT * MEDIAPIPEPOSE_DETECTOR_TENSOR_SIZE];
-        rawScoresOutput = new float[MEDIAPIPEPOSE_DETECTOR_TENSOR_COUNT];
-        estimationScoreBuffer = new float[1];
-        estimationInputArray = new float[MEDIAPIPEPOSE_ESTIMATOR_INPUT_RESOLUTION * MEDIAPIPEPOSE_ESTIMATOR_INPUT_RESOLUTION * MEDIAPIPEPOSE_DETECTOR_INPUT_CHANNEL_COUNT];
-        estimationOutputBuffer = new float[MEDIAPIPEPOSE_ESTIMATOR_TENSOR_COUNT * MEDIAPIPEPOSE_ESTIMATOR_TENSOR_SIZE];
     }
 
-    private float[] inputArray;
-    private float[] rawBoxesOutput;
-    private float[] rawScoresOutput;
-    private List<Box> boxes;
-    private Box? poseDetectionBox;
-    RenderTexture preprocessBuffer;
-
-    private void PreprocessTexture(Texture2D texture)
+    public List<AiliaPoseEstimator.AILIAPoseEstimatorObjectPose> RunPoseEstimation(Color32[] camera, int tex_width, int tex_height)
     {
-        if (preprocessBuffer == null)
+        imageWidth = tex_width;
+        imageHeight = tex_height;
+
+        // Convert B2T Color32[] to T2B for engine (Unity GetPixels32 returns B2T)
+        Color32[] pixelsT2B = new Color32[camera.Length];
+        for (int y = 0; y < tex_height; y++)
         {
-            preprocessBuffer = new RenderTexture(MEDIAPIPEPOSE_DETECTOR_INPUT_RESOLUTION, MEDIAPIPEPOSE_DETECTOR_INPUT_RESOLUTION, 0, RenderTextureFormat.ARGB32);
+            Array.Copy(camera, (tex_height - 1 - y) * tex_width, pixelsT2B, y * tex_width, tex_width);
         }
 
-        Texture2D letterboxed = TexturePreprocessor.PreprocessTexture(texture, preprocessBuffer, MEDIAPIPEPOSE_DETECTOR_INPUT_RESOLUTION * Vector2.one);
-        Color32[] colorData = letterboxed.GetPixels32();
+        // Run detection (or use cached box)
+        MediapipePoseWorldEngine.DecodedBox? detectionBox = cachedDetectionBox;
 
-        // Normalize to [-1, 1] range (matching Python: (pixel / 127.5) - 1.0)
-        for (int heightIndex = 0; heightIndex < MEDIAPIPEPOSE_DETECTOR_INPUT_RESOLUTION; heightIndex++)
+        if (!detectionBox.HasValue)
         {
-            for (int widthIndex = 0; widthIndex < MEDIAPIPEPOSE_DETECTOR_INPUT_RESOLUTION; widthIndex++)
+            float padH, padW;
+            float[] detInput = engine.PreprocessDetection(pixelsT2B, tex_width, tex_height, out padH, out padW);
+            var detOutput = backend.RunDetector(detInput,
+                MediapipePoseWorldEngine.DETECTOR_INPUT_RESOLUTION,
+                MediapipePoseWorldEngine.DETECTOR_INPUT_RESOLUTION,
+                MediapipePoseWorldEngine.DETECTOR_INPUT_CHANNEL_COUNT);
+            var boxes = engine.DecodeAndProcessBoxes(detOutput.RawBoxes, detOutput.RawScores, anchors, padH, padW);
+
+            if (boxes.Count == 0)
             {
-                int index = (int)(((heightIndex * MEDIAPIPEPOSE_DETECTOR_INPUT_RESOLUTION) + widthIndex) * MEDIAPIPEPOSE_DETECTOR_INPUT_CHANNEL_COUNT);
-                Color32 value = colorData[(MEDIAPIPEPOSE_DETECTOR_INPUT_RESOLUTION - heightIndex - 1) * MEDIAPIPEPOSE_DETECTOR_INPUT_RESOLUTION + widthIndex];
-
-                inputArray[index + 0] = value.r / 127.5f - 1.0f;
-                inputArray[index + 1] = value.g / 127.5f - 1.0f;
-                inputArray[index + 2] = value.b / 127.5f - 1.0f;
+                Debug.Log("NO POSE");
+                return new List<AiliaPoseEstimator.AILIAPoseEstimatorObjectPose>();
             }
+
+            detectionBox = boxes[0];
+            cachedDetectionBox = detectionBox;
         }
-    }
 
-    private uint estimationInputWidth;
-    private uint estimationInputHeight;
-    private float[] estimationInputArray;
-    private float[] estimationOutputBuffer;
-    float[] estimationScoreBuffer;
-    public List<Landmark> landmarks = new List<Landmark>();
+        // Extract ROI using GPU ComputeShader (Unity-specific, higher performance)
+        Texture2D roiTex = ExtractROIFromBoxGpu(camera, tex_width, tex_height, detectionBox.Value);
 
-    private void PreprocessTextureEstimation(Texture2D texture)
-    {
-        estimationInputWidth = ((uint)texture.width);
-        estimationInputHeight = ((uint)texture.height);
-
-        Color32[] colorData = texture.GetPixels32();
+        // Preprocess ROI texture for estimator ([0,1] normalization)
+        int estRes = MediapipePoseWorldEngine.ESTIMATOR_INPUT_RESOLUTION;
+        Color32[] roiPixels = roiTex.GetPixels32();
+        float[] estInput = new float[estRes * estRes * MediapipePoseWorldEngine.DETECTOR_INPUT_CHANNEL_COUNT];
         const float factor = 1 / 255f;
-
-        for (int heightIndex = 0; heightIndex < estimationInputHeight; heightIndex++)
+        for (int y = 0; y < estRes; y++)
         {
-            for (int widthIndex = 0; widthIndex < estimationInputWidth; widthIndex++)
+            for (int x = 0; x < estRes; x++)
             {
-                int index = (int)(((heightIndex * estimationInputWidth) + widthIndex) * MEDIAPIPEPOSE_DETECTOR_INPUT_CHANNEL_COUNT);
-                Color32 value = colorData[heightIndex * estimationInputWidth + widthIndex];
-
-                estimationInputArray[index + 0] = value.r * factor;
-                estimationInputArray[index + 1] = value.g * factor;
-                estimationInputArray[index + 2] = value.b * factor;
+                int idx = (y * estRes + x) * 3;
+                Color32 c = roiPixels[y * estRes + x];
+                estInput[idx + 0] = c.r * factor;
+                estInput[idx + 1] = c.g * factor;
+                estInput[idx + 2] = c.b * factor;
             }
         }
+
+        // Run estimator
+        var estOutput = backend.RunEstimator(estInput, estRes, estRes, MediapipePoseWorldEngine.DETECTOR_INPUT_CHANNEL_COUNT);
+
+        // Decode landmarks
+        engine.DecodeLandmarks(estOutput.Landmarks);
+
+        return GetResult(false);
     }
 
-    private float affine_xc = 0;
-    private float affine_yc = 0;
-    private float affine_x1 = 0;
-    private float affine_y1 = 0;
-    private float affine_scale = 0;
-    private float affine_angle = 0;
-
-    private Texture2D ExtractROIFromBox(Texture2D texture, Box box)
+    public List<AiliaPoseEstimator.AILIAPoseEstimatorObjectPose> GetResult(bool world_cordinate)
     {
-        float finalSquareLength = Mathf.Max(texture.width, texture.height);
-        int xOffset = ((int)((finalSquareLength - texture.width) / 2));
-        int yOffset = ((int)((finalSquareLength - texture.height) / 2));
-
-        Box scaledBox = box;
-        scaledBox.xMin = finalSquareLength * scaledBox.xMin - xOffset;
-        scaledBox.xMax = finalSquareLength * scaledBox.xMax - xOffset;
-        scaledBox.yMin = texture.height - 1 - finalSquareLength * scaledBox.yMin + yOffset;
-        scaledBox.yMax = texture.height - 1 - finalSquareLength * scaledBox.yMax + yOffset;
-        scaledBox.keypoints = new Vector2[scaledBox.keypoints.Length];
-
-        for (int i = 0; i < box.keypoints.Length; ++i)
+        if (engine.Landmarks == null)
         {
-            scaledBox.keypoints[i] = new Vector2(
-                finalSquareLength * box.keypoints[i].x - xOffset,
-                texture.height - 1 - finalSquareLength * box.keypoints[i].y + yOffset
-            );
+            return new List<AiliaPoseEstimator.AILIAPoseEstimatorObjectPose>();
         }
 
-        int kp1 = 0;
-        int kp2 = 1;
-        float theta0 = Mathf.PI / 2f;
+        PoseLandmarkResult[] results;
+        if (world_cordinate)
+        {
+            results = engine.GetWorldResult();
+        }
+        else
+        {
+            results = engine.GetImageResult(imageWidth, imageHeight);
+        }
+
+        if (results == null)
+        {
+            return new List<AiliaPoseEstimator.AILIAPoseEstimatorObjectPose>();
+        }
+
+        // Convert PoseLandmarkResult[19] to AILIAPoseEstimatorObjectPose
+        var result_list = new List<AiliaPoseEstimator.AILIAPoseEstimatorObjectPose>();
+        AiliaPoseEstimator.AILIAPoseEstimatorObjectPose one_pose = new AiliaPoseEstimator.AILIAPoseEstimatorObjectPose();
+        one_pose.points = new AiliaPoseEstimator.AILIAPoseEstimatorKeypoint[19];
+
+        for (int i = 0; i < results.Length; i++)
+        {
+            AiliaPoseEstimator.AILIAPoseEstimatorKeypoint keypoint = new AiliaPoseEstimator.AILIAPoseEstimatorKeypoint();
+            keypoint.x = results[i].X;
+            keypoint.y = results[i].Y;
+            keypoint.z_local = results[i].Z;
+            keypoint.score = results[i].Confidence;
+            one_pose.points[i] = keypoint;
+        }
+
+        result_list.Add(one_pose);
+        return result_list;
+    }
+
+    public string EnvironmentName()
+    {
+        return backend.EnvironmentName();
+    }
+
+    // -------------------------------------------------------
+    // GPU ROI extraction using ComputeShader (Unity-specific)
+    // -------------------------------------------------------
+    private Texture2D ExtractROIFromBoxGpu(Color32[] camera, int tex_width, int tex_height,
+        MediapipePoseWorldEngine.DecodedBox box)
+    {
+        // Create texture from camera data
+        if (input_texture == null)
+        {
+            input_texture = new Texture2D(tex_width, tex_height);
+        }
+        input_texture.SetPixels32(camera);
+        input_texture.Apply();
+
+        int estRes = MediapipePoseWorldEngine.ESTIMATOR_INPUT_RESOLUTION;
         float dscale = MediapipePoseWorldEngine.ROI_SCALE_FACTOR;
 
-        float xc = scaledBox.keypoints[kp1].x;
-        float yc = scaledBox.keypoints[kp1].y;
-        float x1 = scaledBox.keypoints[kp2].x;
-        float y1 = scaledBox.keypoints[kp2].y;
-        float scale = dscale * Mathf.Sqrt((Mathf.Pow(xc - x1, 2) + Mathf.Pow(yc - y1, 2))) * 2;
+        // Convert normalized box keypoints to pixel coordinates (B2T space for Unity)
+        float finalSquareLength = Mathf.Max(tex_width, tex_height);
+        int xOffset = (int)((finalSquareLength - tex_width) / 2);
+        int yOffset = (int)((finalSquareLength - tex_height) / 2);
+
+        float xc = finalSquareLength * box.keypoints[0][0] - xOffset;
+        float yc = tex_height - 1 - finalSquareLength * box.keypoints[0][1] + yOffset;
+        float x1 = finalSquareLength * box.keypoints[1][0] - xOffset;
+        float y1 = tex_height - 1 - finalSquareLength * box.keypoints[1][1] + yOffset;
+
+        float theta0 = Mathf.PI / 2f;
+        float scale = dscale * Mathf.Sqrt(Mathf.Pow(xc - x1, 2) + Mathf.Pow(yc - y1, 2)) * 2;
         float angle = Mathf.Atan2(yc - y1, xc - x1) - theta0;
 
-        affine_xc = box.keypoints[kp1].x;
-        affine_yc = box.keypoints[kp1].y;
-        affine_x1 = box.keypoints[kp2].x;
-        affine_y1 = box.keypoints[kp2].y;
-        affine_scale = dscale * Mathf.Sqrt((Mathf.Pow(affine_xc - affine_x1, 2) + Mathf.Pow(affine_yc - affine_y1, 2))) * 2;
-        affine_angle = Mathf.Atan2(affine_yc - affine_y1, affine_xc - affine_x1) - theta0;
+        // Set engine ROI parameters (for GetImageResult coordinate transform)
+        // Use T2B keypoint coordinates for engine
+        float xcT2B = box.keypoints[0][0] * tex_width;
+        float ycT2B = box.keypoints[0][1] * tex_height;
+        float x1T2B = box.keypoints[1][0] * tex_width;
+        float y1T2B = box.keypoints[1][1] * tex_height;
 
+        // Call ExtractROI with minimal pixel array just to set ROI parameters
+        // (we use GPU for the actual extraction but need the engine's ROI state)
+        var dummyPixels = new Color32[1];
+        engine.ExtractROI(dummyPixels, tex_width, tex_height, box);
+
+        // Compute affine transform matrix for GPU shader
         Vector2[] points = new Vector2[]
         {
             new Vector2(1, -1),
             new Vector2(1, 1),
             new Vector2(-1, -1)
         };
-
         for (int i = 0; i < points.Length; ++i)
-        {
             points[i] *= scale / 2;
-        }
 
         float cosAngle = Mathf.Cos(angle);
         float sinAngle = Mathf.Sin(angle);
-
         for (int i = 0; i < points.Length; ++i)
         {
             Vector2 p = points[i];
@@ -230,81 +227,49 @@ public class AiliaMediapipePoseWorldLandmarks : IDisposable
             );
         }
 
-        int resolution = MEDIAPIPEPOSE_ESTIMATOR_INPUT_RESOLUTION - 1;
+        int resolution = estRes - 1;
         Matrix4x4 before_m = new Matrix4x4()
         {
-            m00 = 0,
-            m01 = 0,
-            m02 = resolution,
-            m03 = 0,
-            m10 = 0,
-            m11 = resolution,
-            m12 = 0,
-            m13 = 0,
-            m20 = 1,
-            m21 = 1,
-            m22 = 1,
-            m23 = 0,
-            m30 = 0,
-            m31 = 0,
-            m32 = 0,
-            m33 = 1,
+            m00 = 0, m01 = 0, m02 = resolution, m03 = 0,
+            m10 = 0, m11 = resolution, m12 = 0, m13 = 0,
+            m20 = 1, m21 = 1, m22 = 1, m23 = 0,
+            m30 = 0, m31 = 0, m32 = 0, m33 = 1,
         };
-
         Matrix4x4 after_m = new Matrix4x4()
         {
-            m00 = points[0].x,
-            m01 = points[1].x,
-            m02 = points[2].x,
-            m03 = 0,
-            m10 = points[0].y,
-            m11 = points[1].y,
-            m12 = points[2].y,
-            m13 = 0,
-            m20 = 1,
-            m21 = 1,
-            m22 = 1,
-            m23 = 0,
-            m30 = 0,
-            m31 = 0,
-            m32 = 0,
-            m33 = 1,
+            m00 = points[0].x, m01 = points[1].x, m02 = points[2].x, m03 = 0,
+            m10 = points[0].y, m11 = points[1].y, m12 = points[2].y, m13 = 0,
+            m20 = 1, m21 = 1, m22 = 1, m23 = 0,
+            m30 = 0, m31 = 0, m32 = 0, m33 = 1,
         };
-
         Matrix4x4 transfrom_m = after_m * before_m.inverse;
 
-
-
+        // GPU compute shader dispatch
         if (computeTexture == null)
         {
-            computeTexture = new RenderTexture(MEDIAPIPEPOSE_ESTIMATOR_INPUT_RESOLUTION, MEDIAPIPEPOSE_ESTIMATOR_INPUT_RESOLUTION, 32);
+            computeTexture = new RenderTexture(estRes, estRes, 32);
             computeTexture.enableRandomWrite = true;
         }
-
         if (kernelIndex < 0)
         {
             kernelIndex = computeShader.FindKernel("AffineTransform");
         }
 
-        computeShader.SetTexture(kernelIndex, ID_InputTexture, texture);
+        computeShader.SetTexture(kernelIndex, ID_InputTexture, input_texture);
         computeShader.SetTexture(kernelIndex, ID_OutputTexture, computeTexture);
         computeShader.SetMatrix(ID_Matrix, transfrom_m);
-        computeShader.SetInt(ID_InputWidth, texture.width);
-        computeShader.SetInt(ID_InputHeight, texture.height);
-        computeShader.SetInt(ID_OutputWidth, MEDIAPIPEPOSE_ESTIMATOR_INPUT_RESOLUTION);
-        computeShader.SetInt(ID_OutputHeight, MEDIAPIPEPOSE_ESTIMATOR_INPUT_RESOLUTION);
+        computeShader.SetInt(ID_InputWidth, tex_width);
+        computeShader.SetInt(ID_InputHeight, tex_height);
+        computeShader.SetInt(ID_OutputWidth, estRes);
+        computeShader.SetInt(ID_OutputHeight, estRes);
         computeShader.SetVector(ID_BackgroundColor, new Vector4(0, 0, 0, 1));
+        computeShader.Dispatch(kernelIndex, estRes / 32 + 1, estRes / 32 + 1, 1);
 
-        computeShader.Dispatch(kernelIndex, MEDIAPIPEPOSE_ESTIMATOR_INPUT_RESOLUTION / 32 + 1, MEDIAPIPEPOSE_ESTIMATOR_INPUT_RESOLUTION / 32 + 1, 1);
-
-        roiTexture = toTexture2D(computeTexture, roiTexture);
-
+        roiTexture = ToTexture2D(computeTexture, roiTexture);
         return roiTexture;
     }
-    RenderTexture computeTexture;
-    Texture2D roiTexture;
 
-    Texture2D toTexture2D(RenderTexture rTex, Texture2D output = null)
+    private Texture2D ToTexture2D(RenderTexture rTex, Texture2D output = null)
     {
         var org = RenderTexture.active;
         output = output ?? new Texture2D(rTex.width, rTex.height, TextureFormat.RGBA32, false);
@@ -315,338 +280,39 @@ public class AiliaMediapipePoseWorldLandmarks : IDisposable
         return output;
     }
 
-    Texture2D input_texture = null;
-
-    public List<AiliaPoseEstimator.AILIAPoseEstimatorObjectPose> RunPoseEstimation(Color32[] camera, int tex_width, int tex_height)
-    {
-        if (input_texture == null)
-        {
-            input_texture = new Texture2D(tex_width, tex_height);
-        }
-        input_texture.SetPixels32(camera);
-        input_texture.Apply();
-
-        Texture2D detection = RunDetectionModel(input_texture);
-        if (detection == null)
-        {
-            Debug.Log("NO POSE");
-            return new List<AiliaPoseEstimator.AILIAPoseEstimatorObjectPose>();
-        }
-
-        RunEstimationModel(detection);
-
-        return GetResult(false);
-    }
-
-    private Texture2D RunDetectionModel(Texture2D inputTexture)
-    {
-        bool status;
-
-        if (poseDetectionBox == null)
-        {
-            PreprocessTexture(inputTexture);
-
-            int inputBlobIndex = ailiaPoseDetection.FindBlobIndexByName("input_1");
-
-            status = ailiaPoseDetection.SetInputBlobShape(
-                new Ailia.AILIAShape
-                {
-                    x = (uint)MEDIAPIPEPOSE_DETECTOR_INPUT_CHANNEL_COUNT,
-                    y = (uint)MEDIAPIPEPOSE_DETECTOR_INPUT_RESOLUTION,
-                    z = (uint)MEDIAPIPEPOSE_DETECTOR_INPUT_RESOLUTION,
-                    w = 1,
-                    dim = 4
-                },
-                inputBlobIndex
-            );
-
-            if (status == false)
-            {
-                Debug.LogError("Could not set input blob shape");
-                Debug.LogError(ailiaPoseDetection.GetErrorDetail());
-            }
-
-            status = ailiaPoseDetection.SetInputBlobData(inputArray, inputBlobIndex);
-            if (status == false)
-            {
-                Debug.LogError("Could not set input blob data");
-                Debug.LogError(ailiaPoseDetection.GetErrorDetail());
-            }
-
-            bool result = ailiaPoseDetection.Update();
-            if (result == false)
-            {
-                Debug.Log(ailiaPoseDetection.GetErrorDetail());
-            }
-
-            int outputBlobIndex = ailiaPoseDetection.FindBlobIndexByName("Identity");
-            status = ailiaPoseDetection.GetBlobData(rawBoxesOutput, outputBlobIndex);
-            if (status == false)
-            {
-                Debug.LogError("Could not get output blob data " + outputBlobIndex);
-                Debug.LogError(ailiaPoseDetection.GetErrorDetail());
-            }
-
-            outputBlobIndex = ailiaPoseDetection.FindBlobIndexByName("Identity_1");
-            status = ailiaPoseDetection.GetBlobData(rawScoresOutput, outputBlobIndex);
-            if (status == false)
-            {
-                Debug.LogError("Could not get output blob data " + outputBlobIndex);
-                Debug.LogError(ailiaPoseDetection.GetErrorDetail());
-            }
-
-            DecodeAndProcessBoxes();
-
-            if (boxes.Count == 0)
-            {
-                return null;
-            }
-            else
-            {
-                poseDetectionBox = boxes[0];
-            }
-        }
-
-        Texture2D roi = ExtractROIFromBox(inputTexture, poseDetectionBox.Value);
-        return roi;
-    }
-
-    private void RunEstimationModel(Texture2D inputTexture)
-    {
-
-        bool status;
-        PreprocessTextureEstimation(inputTexture);
-
-        int inputBlobIndex = ailiaPoseEstimation.FindBlobIndexByName("input_1");
-
-        status = ailiaPoseEstimation.SetInputBlobShape(
-            new Ailia.AILIAShape
-            {
-                x = (uint)MEDIAPIPEPOSE_DETECTOR_INPUT_CHANNEL_COUNT,
-                y = (uint)MEDIAPIPEPOSE_ESTIMATOR_INPUT_RESOLUTION,
-                z = (uint)MEDIAPIPEPOSE_ESTIMATOR_INPUT_RESOLUTION,
-                w = 1,
-                dim = 4
-            },
-            inputBlobIndex
-        );
-
-        if (status == false)
-        {
-            Debug.LogError("Could not set input blob shape");
-            Debug.LogError(ailiaPoseEstimation.GetErrorDetail());
-        }
-
-        status = ailiaPoseEstimation.SetInputBlobData(estimationInputArray, inputBlobIndex);
-        if (status == false)
-        {
-            Debug.LogError("Could not set input blob data");
-            Debug.LogError(ailiaPoseEstimation.GetErrorDetail());
-        }
-
-        status = ailiaPoseEstimation.Update();
-        if (status == false)
-        {
-            Debug.Log(ailiaPoseEstimation.GetErrorDetail());
-        }
-
-        int outputBlobIndex = ailiaPoseEstimation.FindBlobIndexByName("Identity_1");
-        status = ailiaPoseEstimation.GetBlobData(estimationScoreBuffer, outputBlobIndex);
-        if (status == false)
-        {
-            Debug.LogError("Could not get pose score output blob data " + outputBlobIndex);
-            Debug.LogError(ailiaPoseEstimation.GetErrorDetail());
-        }
-        float poseScore = estimationScoreBuffer[0];
-
-        outputBlobIndex = ailiaPoseEstimation.FindBlobIndexByName("Identity");
-        status = ailiaPoseEstimation.GetBlobData(estimationOutputBuffer, outputBlobIndex);
-        //Debug.Log(estimationOutputBuffer[0]); //デバック->116.1621
-
-        if (status == false)
-        {
-            Debug.LogError("Could not get output blob data " + outputBlobIndex);
-            Debug.LogError(ailiaPoseEstimation.GetErrorDetail());
-        }
-
-        DecodeAndProcessLandmarks();
-    }
-
-    private float Sigmoid(float x)
-    {
-        return engine.Sigmoid(x);
-    }
-
-    private void DecodeAndProcessBoxes()
-    {
-        // Delegate to shared engine logic
-        var decodedBoxes = engine.DecodeAndProcessBoxes(rawBoxesOutput, rawScoresOutput, anchors);
-
-        // Convert DecodedBox to Box for Unity rendering pipeline
-        boxes = new List<Box>();
-        foreach (var db in decodedBoxes)
-        {
-            Vector2[] kps = new Vector2[MediapipePoseWorldEngine.DETECTOR_KEYPOINT_COUNT];
-            for (int k = 0; k < kps.Length; k++)
-                kps[k] = new Vector2(db.keypoints[k][0], db.keypoints[k][1]);
-
-            boxes.Add(new Box
-            {
-                xMin = db.xMin,
-                yMin = db.yMin,
-                xMax = db.xMax,
-                yMax = db.yMax,
-                keypoints = kps,
-                area = db.area,
-                score = db.score
-            });
-        }
-    }
-
-    private void DecodeAndProcessLandmarks()
-    {
-        // Delegate to shared engine logic
-        var decoded = engine.DecodeLandmarks(estimationOutputBuffer);
-
-        // Convert PoseLandmarkResult to Landmark for Unity rendering pipeline
-        landmarks = new List<Landmark>();
-        for (int i = 0; i < decoded.Length; i++)
-        {
-            landmarks.Add(new Landmark
-            {
-                position = new Vector3(decoded[i].X, decoded[i].Y, decoded[i].Z),
-                confidence = decoded[i].Confidence
-            });
-        }
-    }
-
-    public List<AiliaPoseEstimator.AILIAPoseEstimatorObjectPose> GetResult(bool world_cordinate)
-    {
-        List<AiliaPoseEstimator.AILIAPoseEstimatorObjectPose> result_list = new List<AiliaPoseEstimator.AILIAPoseEstimatorObjectPose>();
-        int[] keypoint_list ={
-            (int)BodyPartIndex.Nose,
-            (int)BodyPartIndex.LeftEye,
-            (int)BodyPartIndex.RightEye,
-            (int)BodyPartIndex.LeftEar,
-            (int)BodyPartIndex.RightEar,
-            (int)BodyPartIndex.LeftShoulder,
-            (int)BodyPartIndex.RightShoulder,
-            (int)BodyPartIndex.LeftElbow,
-            (int)BodyPartIndex.RightElbow,
-            (int)BodyPartIndex.LeftWrist,
-            (int)BodyPartIndex.RightWrist,
-            (int)BodyPartIndex.LeftHip,
-            (int)BodyPartIndex.RightHip,
-            (int)BodyPartIndex.LeftKnee,
-            (int)BodyPartIndex.RightKnee,
-            (int)BodyPartIndex.LeftAnkle,
-            (int)BodyPartIndex.RightAnkle};
-
-        if (affine_scale == 0)
-        {
-            return result_list;
-        }
-
-        float cs = (float)Math.Cos(-affine_angle);
-        float ss = (float)Math.Sin(-affine_angle);
-
-        AiliaPoseEstimator.AILIAPoseEstimatorObjectPose one_pose = new AiliaPoseEstimator.AILIAPoseEstimatorObjectPose();
-        one_pose.points = new AiliaPoseEstimator.AILIAPoseEstimatorKeypoint[19];
-        for (int i = 0; i < AiliaPoseEstimator.AILIA_POSE_ESTIMATOR_POSE_KEYPOINT_CNT; i++)
-        {
-            Vector3 pos = Vector3.zero;
-            float conf = 0;
-            if (i <= AiliaPoseEstimator.AILIA_POSE_ESTIMATOR_POSE_KEYPOINT_ANKLE_RIGHT)
-            {
-                pos = landmarks[keypoint_list[i]].position;
-                conf = landmarks[keypoint_list[i]].confidence;
-                //Debug.Log(AiliaPoseEstimator.AILIA_POSE_ESTIMATOR_POSE_KEYPOINT_ANKLE_RIGHT);//デバック->16
-                //Debug.Log("i" + i);//デバック
-                //Debug.Log("keypoint_list[i]" + keypoint_list[i]);//デバック
-            }
-            if (i == AiliaPoseEstimator.AILIA_POSE_ESTIMATOR_POSE_KEYPOINT_SHOULDER_CENTER)
-            {
-                pos = (landmarks[(int)BodyPartIndex.LeftShoulder].position + landmarks[(int)BodyPartIndex.RightShoulder].position) / 2;
-                conf = Math.Min(landmarks[(int)BodyPartIndex.LeftShoulder].confidence, landmarks[(int)BodyPartIndex.RightShoulder].confidence);
-            }
-            if (i == AiliaPoseEstimator.AILIA_POSE_ESTIMATOR_POSE_KEYPOINT_BODY_CENTER)
-            {
-                pos = (landmarks[(int)BodyPartIndex.LeftHip].position + landmarks[(int)BodyPartIndex.RightHip].position + landmarks[(int)BodyPartIndex.LeftShoulder].position + landmarks[(int)BodyPartIndex.RightShoulder].position) / 4;
-                conf = Math.Min(Math.Min(landmarks[(int)BodyPartIndex.LeftHip].confidence, landmarks[(int)BodyPartIndex.RightHip].confidence), Math.Min(landmarks[(int)BodyPartIndex.LeftShoulder].confidence, landmarks[(int)BodyPartIndex.RightShoulder].confidence));
-            }
-            AiliaPoseEstimator.AILIAPoseEstimatorKeypoint keypoint = new AiliaPoseEstimator.AILIAPoseEstimatorKeypoint();
-            if (world_cordinate){
-                keypoint.x = pos.x;
-                keypoint.y = pos.y;
-            }else{
-                keypoint.x = ((pos.x - 0.5f) * cs + (pos.y - 0.5f) * ss) * affine_scale + affine_xc;
-                keypoint.y = ((pos.x - 0.5f) * -ss + (pos.y - 0.5f) * cs) * affine_scale + affine_yc;
-            }
-            keypoint.z_local = pos.z;
-            keypoint.score = conf;
-            one_pose.points[i] = keypoint;
-
-        }
-        result_list.Add(one_pose);
-        return result_list;
-    }
-
-
     public static float[] ConvertDoubleArrayToFloatArray(double[] doubleArray)
     {
         float[] floatArray = new float[doubleArray.Length];
-
         for (int i = 0; i < doubleArray.Length; i++)
         {
             floatArray[i] = (float)doubleArray[i];
         }
-
         return floatArray;
     }
 
-    public string EnvironmentName(){
-        return ailiaPoseDetection.EnvironmentName();
-    }
-
-
-
-
-
-
-
-
-
     #region IDisposable Support
-    private bool disposedValue = false; // To detect redundant calls
+    private bool disposedValue = false;
 
     protected virtual void Dispose(bool disposing)
     {
         if (!disposedValue)
         {
-            ailiaPoseDetection.Close();
-            ailiaPoseEstimation.Close();
-            ailiaPoseDetection = null;
-            ailiaPoseEstimation = null;
+            backend?.Dispose();
+            backend = null;
             computeTexture?.Release();
             preprocessBuffer?.Release();
-            
             disposedValue = true;
         }
     }
 
-    // TODO: override a finalizer only if Dispose(bool disposing) above has code to free unmanaged resources.
     ~AiliaMediapipePoseWorldLandmarks()
     {
-        // Do not change this code. Put cleanup code in Dispose(bool disposing) above.
         Dispose(false);
     }
 
-    // This code added to correctly implement the disposable pattern.
     public void Dispose()
     {
-        // Do not change this code. Put cleanup code in Dispose(bool disposing) above.
         Dispose(true);
-        // TODO: uncomment the following line if the finalizer is overridden above.
         GC.SuppressFinalize(this);
     }
     #endregion
