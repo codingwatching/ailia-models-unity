@@ -129,7 +129,7 @@ public class PythonComparisonTest
 
         // PreprocessImage with imageSize=3 would resize, so we test
         // the normalization steps directly to match Python exactly
-        float[,,] floatImg = logic.Color32ArrayToFloatArray(pixels, 2, 3);
+        float[,,] floatImg = Sam2TestHelper.Color32ArrayToFloatArray(pixels, 2, 3);
 
         // Apply normalization: (val - mean) / std
         float[] mean = logic.Mean;
@@ -140,7 +140,7 @@ public class PythonComparisonTest
                     floatImg[h, w, c] = (floatImg[h, w, c] - mean[c]) / std[c];
 
         // Transpose to CHW
-        float[,,] chw = logic.TransposeHWCtoCHW(floatImg);
+        float[,,] chw = Sam2TestHelper.TransposeHWCtoCHW(floatImg);
 
         // Python reference values (exact from generate_sam2_reference.py)
         float[,,] pythonCHW = new float[3, 2, 3]
@@ -370,7 +370,7 @@ public class PythonComparisonTest
                 for (int k = 0; k < 4; k++)
                     input[i, j, k] = val++;
 
-        float[,,] result = logic.Transpose201(input);
+        float[,,] result = Sam2TestHelper.Transpose201(input);
 
         // Python reference
         Assert.That(result[0, 0, 0], Is.EqualTo(0f).Within(Tol), "[0,0,0]=0");
@@ -395,7 +395,7 @@ public class PythonComparisonTest
                     for (int w = 0; w < 3; w++)
                         inputs[0][n, c, h, w] = val++;
 
-        float[][,,] result = logic.ProcessVisionPosEmbeds(inputs);
+        float[][,,] result = Sam2TestHelper.ProcessVisionPosEmbeds(inputs);
 
         // Output shape: (9, 1, 2)
         Assert.That(result[0].GetLength(0), Is.EqualTo(9));

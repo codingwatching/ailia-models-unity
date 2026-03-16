@@ -207,21 +207,6 @@ public class Sam2Processor
     }
 
     /// <summary>
-    /// Convert T2B click coordinates to B2T for visualization.
-    /// </summary>
-    public static float[,] ConvertClickCoordsToB2T(float[,] t2bCoords, int imageHeight)
-    {
-        int count = t2bCoords.GetLength(0);
-        float[,] b2tCoords = new float[count, 2];
-        for (int i = 0; i < count; i++)
-        {
-            b2tCoords[i, 0] = t2bCoords[i, 0];
-            b2tCoords[i, 1] = imageHeight - 1 - t2bCoords[i, 1];
-        }
-        return b2tCoords;
-    }
-
-    /// <summary>
     /// Draw click point markers on pixel array. Both coords and pixels should be in the same order (B2T).
     /// Returns a new Color32[] with markers drawn.
     /// </summary>

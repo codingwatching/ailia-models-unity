@@ -41,7 +41,7 @@ public class SegmentAnything2MaskTest
             new Color32(100, 200, 50, 255),
         };
 
-        float[,,] result = logic.Color32ArrayToFloatArray(pixels, 2, 2);
+        float[,,] result = Sam2TestHelper.Color32ArrayToFloatArray(pixels, 2, 2);
 
         Assert.That(result.GetLength(2), Is.EqualTo(3), "3 channels (RGB)");
 
@@ -151,7 +151,7 @@ public class SegmentAnything2MaskTest
                 for (int c = 0; c < 3; c++)
                     hwc[h, w, c] = h * 100 + w * 10 + c;
 
-        float[,,] chw = logic.TransposeHWCtoCHW(hwc);
+        float[,,] chw = Sam2TestHelper.TransposeHWCtoCHW(hwc);
 
         Assert.That(chw.GetLength(0), Is.EqualTo(3), "C first");
         Assert.That(chw.GetLength(1), Is.EqualTo(2), "H second");
@@ -445,7 +445,7 @@ public class SegmentAnything2MaskTest
     {
         float[] flat = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 };
 
-        float[,,] result = logic.ReshapeTo3D(flat, 2, 3, 2);
+        float[,,] result = Sam2TestHelper.ReshapeTo3D(flat, 2, 3, 2);
 
         Assert.That(result.GetLength(0), Is.EqualTo(2));
         Assert.That(result.GetLength(1), Is.EqualTo(3));
@@ -460,7 +460,7 @@ public class SegmentAnything2MaskTest
     public void ReshapeTo3D_ThrowsOnSizeMismatch()
     {
         float[] flat = { 1, 2, 3, 4, 5 };
-        Assert.Throws<ArgumentException>(() => logic.ReshapeTo3D(flat, 2, 3, 2));
+        Assert.Throws<ArgumentException>(() => Sam2TestHelper.ReshapeTo3D(flat, 2, 3, 2));
     }
 
     // =======================================================
@@ -470,7 +470,7 @@ public class SegmentAnything2MaskTest
     public void ReshapeTo2D_CorrectLayout()
     {
         float[] flat = { 1, 2, 3, 4, 5, 6 };
-        float[,] result = logic.ReshapeTo2D(flat, 2, 3);
+        float[,] result = Sam2TestHelper.ReshapeTo2D(flat, 2, 3);
 
         Assert.That(result[0, 0], Is.EqualTo(1f).Within(Tolerance));
         Assert.That(result[0, 2], Is.EqualTo(3f).Within(Tolerance));
@@ -502,7 +502,7 @@ public class SegmentAnything2MaskTest
                     b[i, j, k] = 1.0f;
                 }
 
-        float[,,] result = logic.BroadcastAdd3D(a, b);
+        float[,,] result = Sam2TestHelper.BroadcastAdd3D(a, b);
 
         for (int i = 0; i < 2; i++)
             for (int j = 0; j < 3; j++)
@@ -522,7 +522,7 @@ public class SegmentAnything2MaskTest
         for (int k = 0; k < 4; k++)
             b[0, 0, k] = 10.0f;
 
-        float[,,] result = logic.BroadcastAdd3D(a, b);
+        float[,,] result = Sam2TestHelper.BroadcastAdd3D(a, b);
 
         Assert.That(result.GetLength(0), Is.EqualTo(3));
         Assert.That(result.GetLength(1), Is.EqualTo(2));
@@ -539,7 +539,7 @@ public class SegmentAnything2MaskTest
     {
         float[,,] a = new float[3, 2, 4];
         float[,,] b = new float[2, 2, 4];
-        Assert.Throws<ArgumentException>(() => logic.BroadcastAdd3D(a, b));
+        Assert.Throws<ArgumentException>(() => Sam2TestHelper.BroadcastAdd3D(a, b));
     }
 
     // =======================================================
@@ -556,7 +556,7 @@ public class SegmentAnything2MaskTest
                 for (int k = 0; k < 4; k++)
                     input[i, j, k] = val++;
 
-        float[,,] result = logic.Transpose201(input);
+        float[,,] result = Sam2TestHelper.Transpose201(input);
 
         Assert.That(result.GetLength(0), Is.EqualTo(4), "Dim 0 = original dim 2");
         Assert.That(result.GetLength(1), Is.EqualTo(2), "Dim 1 = original dim 0");
@@ -584,7 +584,7 @@ public class SegmentAnything2MaskTest
                     for (int i3 = 0; i3 < 5; i3++)
                         input[i0, i1, i2, i3] = val++;
 
-        float[,,] result = logic.FourReshapeTo3D(input);
+        float[,,] result = Sam2TestHelper.FourReshapeTo3D(input);
 
         Assert.That(result.GetLength(0), Is.EqualTo(2));
         Assert.That(result.GetLength(1), Is.EqualTo(3));
@@ -617,7 +617,7 @@ public class SegmentAnything2MaskTest
                             inputs[idx][n, c, h, w] = val++;
         }
 
-        float[][,,] result = logic.ProcessVisionPosEmbeds(inputs);
+        float[][,,] result = Sam2TestHelper.ProcessVisionPosEmbeds(inputs);
 
         Assert.That(result.Length, Is.EqualTo(2));
 
@@ -764,7 +764,7 @@ public class SegmentAnything2MaskTest
         src[1, 0, 0] = 0.0f; src[1, 0, 1] = 0.0f; src[1, 0, 2] = 1.0f; // blue
         src[1, 1, 0] = 1.0f; src[1, 1, 1] = 1.0f; src[1, 1, 2] = 0.0f; // yellow
 
-        float[,,] result = logic.ResizeBilinearHWC(src, 2, 2, 4, 4);
+        float[,,] result = Sam2TestHelper.ResizeBilinearHWC(src, 2, 2, 4, 4);
 
         Assert.That(result.GetLength(0), Is.EqualTo(4));
         Assert.That(result.GetLength(1), Is.EqualTo(4));
@@ -789,7 +789,7 @@ public class SegmentAnything2MaskTest
         src[1, 0, 0] = 0.7f; src[1, 0, 1] = 0.8f; src[1, 0, 2] = 0.9f;
         src[1, 1, 0] = 1.0f; src[1, 1, 1] = 0.0f; src[1, 1, 2] = 0.5f;
 
-        float[,,] result = logic.ResizeBilinearHWC(src, 2, 2, 2, 2);
+        float[,,] result = Sam2TestHelper.ResizeBilinearHWC(src, 2, 2, 2, 2);
 
         Assert.That(result.GetLength(0), Is.EqualTo(2));
         for (int h = 0; h < 2; h++)
@@ -804,9 +804,9 @@ public class SegmentAnything2MaskTest
     [Test]
     public void GetScale_MatchesPythonScaleFactor()
     {
-        Assert.That(logic.GetScale(1920, 1080), Is.EqualTo(1024f / 1920f).Within(Tolerance), "Landscape");
-        Assert.That(logic.GetScale(720, 1280), Is.EqualTo(1024f / 1280f).Within(Tolerance), "Portrait");
-        Assert.That(logic.GetScale(1024, 1024), Is.EqualTo(1.0f).Within(Tolerance), "Square");
+        Assert.That(Sam2TestHelper.GetScale(1920, 1080), Is.EqualTo(1024f / 1920f).Within(Tolerance), "Landscape");
+        Assert.That(Sam2TestHelper.GetScale(720, 1280), Is.EqualTo(1024f / 1280f).Within(Tolerance), "Portrait");
+        Assert.That(Sam2TestHelper.GetScale(1024, 1024), Is.EqualTo(1.0f).Within(Tolerance), "Square");
     }
 
     // =======================================================

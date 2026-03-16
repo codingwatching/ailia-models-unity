@@ -41,7 +41,7 @@ public class UnityInputSimulationTest
     // =======================================================
     private Color32[] SimulateUnityGetPixels32(Color32[] top2bottom, int width, int height)
     {
-        return Sam2InferenceEngine.VerticalFlip(top2bottom, width, height);
+        return Sam2TestHelper.VerticalFlip(top2bottom, width, height);
     }
 
     // =======================================================
@@ -87,8 +87,8 @@ public class UnityInputSimulationTest
             );
         }
 
-        Color32[] flipped = Sam2InferenceEngine.VerticalFlip(original, width, height);
-        Color32[] restored = Sam2InferenceEngine.VerticalFlip(flipped, width, height);
+        Color32[] flipped = Sam2TestHelper.VerticalFlip(original, width, height);
+        Color32[] restored = Sam2TestHelper.VerticalFlip(flipped, width, height);
 
         for (int i = 0; i < original.Length; i++)
         {
@@ -114,7 +114,7 @@ public class UnityInputSimulationTest
             input[2 * width + x] = new Color32(0, 0, 255, 255);   // row 2 = blue
         }
 
-        Color32[] flipped = Sam2InferenceEngine.VerticalFlip(input, width, height);
+        Color32[] flipped = Sam2TestHelper.VerticalFlip(input, width, height);
 
         for (int x = 0; x < width; x++)
         {
@@ -138,8 +138,8 @@ public class UnityInputSimulationTest
         original[1, 0] = false; original[1, 1] = true;  original[1, 2] = false; original[1, 3] = true;
         original[2, 0] = true;  original[2, 1] = true;  original[2, 2] = false; original[2, 3] = false;
 
-        bool[,] flipped = Sam2InferenceEngine.VerticalFlipMask(original);
-        bool[,] restored = Sam2InferenceEngine.VerticalFlipMask(flipped);
+        bool[,] flipped = Sam2TestHelper.VerticalFlipMask(original);
+        bool[,] restored = Sam2TestHelper.VerticalFlipMask(flipped);
 
         for (int y = 0; y < height; y++)
             for (int x = 0; x < width; x++)
@@ -158,7 +158,7 @@ public class UnityInputSimulationTest
         for (int x = 0; x < 4; x++) t2bMask[1, x] = false;  // middle row
         for (int x = 0; x < 4; x++) t2bMask[2, x] = false;  // bottom row
 
-        bool[,] b2tMask = Sam2InferenceEngine.VerticalFlipMask(t2bMask);
+        bool[,] b2tMask = Sam2TestHelper.VerticalFlipMask(t2bMask);
 
         // After flip: row 0 (B2T bottom) should be false, row 2 (B2T top) should be true
         for (int x = 0; x < 4; x++)
@@ -191,7 +191,7 @@ public class UnityInputSimulationTest
 
         // Unity path: T2B -> simulate GetPixels32 (B2T) -> VerticalFlip (T2B) -> PreprocessImage
         Color32[] bottom2top = SimulateUnityGetPixels32(top2bottom, width, height);
-        Color32[] flippedBack = Sam2InferenceEngine.VerticalFlip(bottom2top, width, height);
+        Color32[] flippedBack = Sam2TestHelper.VerticalFlip(bottom2top, width, height);
         float[,,,] unityResult = logic.PreprocessImage(flippedBack, width, height, 4);
 
         for (int c = 0; c < 3; c++)
@@ -246,7 +246,7 @@ public class UnityInputSimulationTest
             new Color32(200, 100, 50, 255)
         };
 
-        float[,,] result = logic.Color32ArrayToFloatArray(pixels, 1, 1);
+        float[,,] result = Sam2TestHelper.Color32ArrayToFloatArray(pixels, 1, 1);
 
         Assert.That(result[0, 0, 0], Is.EqualTo(200f / 255f).Within(Tolerance), "Channel 0 = R");
         Assert.That(result[0, 0, 1], Is.EqualTo(100f / 255f).Within(Tolerance), "Channel 1 = G");
@@ -266,8 +266,8 @@ public class UnityInputSimulationTest
         Color32[] correctInput = new Color32[] { correctPixel };
         Color32[] misalignedInput = new Color32[] { misalignedPixel };
 
-        float[,,] correctResult = logic.Color32ArrayToFloatArray(correctInput, 1, 1);
-        float[,,] misalignedResult = logic.Color32ArrayToFloatArray(misalignedInput, 1, 1);
+        float[,,] correctResult = Sam2TestHelper.Color32ArrayToFloatArray(correctInput, 1, 1);
+        float[,,] misalignedResult = Sam2TestHelper.Color32ArrayToFloatArray(misalignedInput, 1, 1);
 
         Assert.That(Math.Abs(correctResult[0, 0, 0] - misalignedResult[0, 0, 0]) > 0.1f, Is.True,
             "ARGB32 misalignment causes R channel error");
@@ -292,7 +292,7 @@ public class UnityInputSimulationTest
 
         // Simulate Unity: B2T -> flip -> preprocess
         Color32[] bottom2top = SimulateUnityGetPixels32(top2bottom, width, height);
-        Color32[] flipped = Sam2InferenceEngine.VerticalFlip(bottom2top, width, height);
+        Color32[] flipped = Sam2TestHelper.VerticalFlip(bottom2top, width, height);
         float[,,,] result = logic.PreprocessImage(flipped, width, height, 8);
 
         float min = float.MaxValue, max = float.MinValue;
@@ -403,7 +403,7 @@ public class UnityInputSimulationTest
                 t2bMask[y, x] = true;
 
         // Flip to B2T for Unity
-        bool[,] b2tMask = Sam2InferenceEngine.VerticalFlipMask(t2bMask);
+        bool[,] b2tMask = Sam2TestHelper.VerticalFlipMask(t2bMask);
 
         // In B2T, the top of the image is at row height-1
         // So the "top half" mask should now be at rows height/2..height-1
@@ -476,7 +476,7 @@ public class UnityInputSimulationTest
         float[,,,] directResult = logic.PreprocessImage(top2bottom, imgW, imgH, 1024);
 
         Color32[] bottom2top = SimulateUnityGetPixels32(top2bottom, imgW, imgH);
-        Color32[] flippedBack = Sam2InferenceEngine.VerticalFlip(bottom2top, imgW, imgH);
+        Color32[] flippedBack = Sam2TestHelper.VerticalFlip(bottom2top, imgW, imgH);
         float[,,,] unityResult = logic.PreprocessImage(flippedBack, imgW, imgH, 1024);
 
         float maxAbsDiff = 0f;
@@ -552,7 +552,7 @@ public class UnityInputSimulationTest
 
         // Unity B2T pipeline: B2T -> internal flip -> T2B -> preprocess
         Color32[] bottom2top = SimulateUnityGetPixels32(top2bottom, imgW, imgH);
-        Color32[] flippedBack = Sam2InferenceEngine.VerticalFlip(bottom2top, imgW, imgH);
+        Color32[] flippedBack = Sam2TestHelper.VerticalFlip(bottom2top, imgW, imgH);
         float[,,,] unityPreprocessed = logic.PreprocessImage(flippedBack, imgW, imgH, 1024);
         float[] unityNchw = logic.Flatten4D(unityPreprocessed);
 
@@ -610,7 +610,7 @@ public class UnityInputSimulationTest
                 t2bMask[y, x] = true;
 
         // Flip mask T2B -> B2T
-        bool[,] b2tMask = Sam2InferenceEngine.VerticalFlipMask(t2bMask);
+        bool[,] b2tMask = Sam2TestHelper.VerticalFlipMask(t2bMask);
 
         // Apply B2T mask to B2T pixels (both aligned)
         Color32[] overlayPixels = (Color32[])b2tPixels.Clone();

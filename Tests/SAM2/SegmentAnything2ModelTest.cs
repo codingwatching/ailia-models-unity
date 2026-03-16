@@ -78,7 +78,7 @@ public class SegmentAnything2ModelTest
 
     private Color32[] SimulateUnityGetPixels32(Color32[] top2bottom, int width, int height)
     {
-        return Sam2InferenceEngine.VerticalFlip(top2bottom, width, height);
+        return Sam2TestHelper.VerticalFlip(top2bottom, width, height);
     }
 
     // =======================================================
@@ -380,7 +380,7 @@ public class SegmentAnything2ModelTest
     public void ConvertClickCoordsToB2T_FlipsY()
     {
         float[,] t2bCoords = new float[,] { { 500, 375 }, { 100, 0 } };
-        float[,] b2tCoords = Sam2Processor.ConvertClickCoordsToB2T(t2bCoords, 1200);
+        float[,] b2tCoords = Sam2TestHelper.ConvertClickCoordsToB2T(t2bCoords, 1200);
 
         Assert.That(b2tCoords[0, 0], Is.EqualTo(500f), "X unchanged");
         Assert.That(b2tCoords[0, 1], Is.EqualTo(824f), "Y = 1200-1-375 = 824");
