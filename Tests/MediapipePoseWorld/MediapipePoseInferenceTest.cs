@@ -437,4 +437,159 @@ public class MediapipePoseInferenceTest
         // sigmoid(1) = 1 / (1 + exp(-1)) ≈ 0.7310586
         Assert.That(engine.Sigmoid(1), Is.EqualTo(0.7310586f).Within(1e-5f));
     }
+
+    // -------------------------------------------------------
+    // Helper: Convert Python NCHW tensor to C# HWC for comparison
+    // -------------------------------------------------------
+    private float[] NchwToHwc(float[] nchw, int channels, int height, int width)
+    {
+        float[] hwc = new float[nchw.Length];
+        int offset = 0; // skip batch dim if present
+        if (nchw.Length > channels * height * width)
+            offset = 0; // npy already flattened from [1,C,H,W]
+
+        for (int c = 0; c < channels; c++)
+            for (int y = 0; y < height; y++)
+                for (int x = 0; x < width; x++)
+                    hwc[(y * width + x) * channels + c] = nchw[c * height * width + y * width + x];
+        return hwc;
+    }
+
+    // -------------------------------------------------------
+    // Test: Detection preprocessing image matches Python
+    // -------------------------------------------------------
+    [Test]
+    public void TestDetectionPreprocessing_MatchesPython()
+    {
+        CheckReferenceExists();
+
+        string detInputPath = Path.Combine(REFERENCE_DIR, "det_input.npy");
+        if (!File.Exists(detInputPath))
+            Assert.Ignore("det_input.npy not found");
+
+        string testImagePath = Path.Combine(REFERENCE_DIR, "test_image.png");
+        if (!File.Exists(testImagePath))
+            Assert.Ignore("test_image.png not found");
+
+        // Load Python's NCHW detection input [1,3,224,224]
+        float[] pyDetInput = LoadNpy(detInputPath);
+        float[] pyHwc = NchwToHwc(pyDetInput, 3, 224, 224);
+
+        // Run C# preprocessing
+        var (pixels, imgW, imgH) = LoadPngImage(testImagePath);
+        float padH, padW;
+        float[] csDetInput = engine.PreprocessDetection(pixels, imgW, imgH, out padH, out padW);
+
+        Assert.That(csDetInput.Length, Is.EqualTo(pyHwc.Length),
+            $"Length mismatch: C#={csDetInput.Length}, Python={pyHwc.Length}");
+
+        // Compare pixel values
+        float maxDiff = 0;
+        double sumDiff = 0;
+        int totalPixels = 224 * 224;
+        for (int i = 0; i < csDetInput.Length; i++)
+        {
+            float diff = Math.Abs(csDetInput[i] - pyHwc[i]);
+            maxDiff = Math.Max(maxDiff, diff);
+            sumDiff += diff;
+        }
+
+        float avgDiff = (float)(sumDiff / csDetInput.Length);
+        Console.WriteLine($"Detection preprocessing comparison:");
+        Console.WriteLine($"  Max pixel diff: {maxDiff:F6}");
+        Console.WriteLine($"  Avg pixel diff: {avgDiff:F6}");
+        Console.WriteLine($"  Total pixels: {totalPixels} ({csDetInput.Length} values)");
+
+        // Print some sample values
+        for (int i = 0; i < 15; i++)
+        {
+            Console.WriteLine($"  [{i}] C#={csDetInput[i]:F6} Python={pyHwc[i]:F6} diff={Math.Abs(csDetInput[i] - pyHwc[i]):F6}");
+        }
+
+        // Tolerance: bilinear interpolation differences should be small
+        Assert.That(maxDiff, Is.LessThan(0.1f),
+            $"Max pixel diff {maxDiff:F6} exceeds tolerance");
+        Assert.That(avgDiff, Is.LessThan(0.02f),
+            $"Avg pixel diff {avgDiff:F6} exceeds tolerance");
+    }
+
+    // -------------------------------------------------------
+    // Test: ROI extraction image matches Python
+    // -------------------------------------------------------
+    [Test]
+    public void TestROIExtraction_MatchesPython()
+    {
+        CheckReferenceExists();
+
+        string lmkInputPath = Path.Combine(REFERENCE_DIR, "lmk_input.npy");
+        if (!File.Exists(lmkInputPath))
+            Assert.Ignore("lmk_input.npy not found");
+
+        string testImagePath = Path.Combine(REFERENCE_DIR, "test_image.png");
+        if (!File.Exists(testImagePath))
+            Assert.Ignore("test_image.png not found");
+
+        float[] refBox = LoadNpy(Path.Combine(REFERENCE_DIR, "detected_box.npy"));
+        if (refBox.Length == 0)
+        {
+            Assert.Ignore("No detected box in reference");
+            return;
+        }
+
+        // Load Python's NCHW landmark input [1,3,256,256]
+        float[] pyLmkInput = LoadNpy(lmkInputPath);
+        float[] pyHwc = NchwToHwc(pyLmkInput, 3, 256, 256);
+
+        // Run C# ROI extraction with the same detected box
+        var (pixels, imgW, imgH) = LoadPngImage(testImagePath);
+
+        var box = new MediapipePoseWorldEngine.DecodedBox
+        {
+            xMin = refBox[0],
+            yMin = refBox[1],
+            xMax = refBox[2],
+            yMax = refBox[3],
+            keypoints = new float[4][]
+        };
+        for (int k = 0; k < 4; k++)
+            box.keypoints[k] = new float[] { refBox[4 + k * 2], refBox[5 + k * 2] };
+
+        var (csLmkInput, roiW, roiH) = engine.ExtractROI(pixels, imgW, imgH, box);
+
+        Assert.That(csLmkInput.Length, Is.EqualTo(pyHwc.Length),
+            $"Length mismatch: C#={csLmkInput.Length}, Python={pyHwc.Length}");
+
+        // Compare pixel values
+        float maxDiff = 0;
+        double sumDiff = 0;
+        int totalPixels = 256 * 256;
+        for (int i = 0; i < csLmkInput.Length; i++)
+        {
+            float diff = Math.Abs(csLmkInput[i] - pyHwc[i]);
+            maxDiff = Math.Max(maxDiff, diff);
+            sumDiff += diff;
+        }
+
+        float avgDiff = (float)(sumDiff / csLmkInput.Length);
+        Console.WriteLine($"ROI extraction comparison:");
+        Console.WriteLine($"  Max pixel diff: {maxDiff:F6}");
+        Console.WriteLine($"  Avg pixel diff: {avgDiff:F6}");
+        Console.WriteLine($"  Total pixels: {totalPixels} ({csLmkInput.Length} values)");
+
+        // Print sample values at center region
+        int cx = 128, cy = 128;
+        for (int dy = -1; dy <= 1; dy++)
+        {
+            for (int dx = -1; dx <= 1; dx++)
+            {
+                int idx = ((cy + dy) * 256 + (cx + dx)) * 3;
+                Console.WriteLine($"  [{cx+dx},{cy+dy}] C#=({csLmkInput[idx]:F4},{csLmkInput[idx+1]:F4},{csLmkInput[idx+2]:F4}) Python=({pyHwc[idx]:F4},{pyHwc[idx+1]:F4},{pyHwc[idx+2]:F4})");
+            }
+        }
+
+        Assert.That(maxDiff, Is.LessThan(0.1f),
+            $"Max pixel diff {maxDiff:F6} exceeds tolerance");
+        Assert.That(avgDiff, Is.LessThan(0.02f),
+            $"Avg pixel diff {avgDiff:F6} exceeds tolerance");
+    }
 }
