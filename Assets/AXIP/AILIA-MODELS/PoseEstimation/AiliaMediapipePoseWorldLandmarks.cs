@@ -41,7 +41,7 @@ public class AiliaMediapipePoseWorldLandmarks : IDisposable
         backend = new AiliaMediapipePoseBackend(gpuMode);
         backend.LoadModels(
             $"{assetPath}/pose_detection_world_landmarks.onnx",
-            $"{assetPath}/pose_landmark_heavy.onnx"
+            $"{assetPath}/pose_landmark_heavy_world_landmarks.onnx"
         );
 
         // Load anchors
