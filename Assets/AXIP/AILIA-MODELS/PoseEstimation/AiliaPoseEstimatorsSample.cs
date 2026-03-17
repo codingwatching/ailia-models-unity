@@ -248,7 +248,7 @@ namespace ailiaSDK
 
 				int r = 2;
 
-				if (ailiaModelType == PoseEstimatorModels.lightweight_human_pose_estimation || ailiaModelType == PoseEstimatorModels.blazepose_fullbody) {
+				if (ailiaModelType == PoseEstimatorModels.lightweight_human_pose_estimation || ailiaModelType == PoseEstimatorModels.blazepose_fullbody || ailiaModelType == PoseEstimatorModels.pose_resnet || ailiaModelType == PoseEstimatorModels.e2pose) {
 					DrawBone(Color.red, tex_width, tex_height, obj, AiliaPoseEstimator.AILIA_POSE_ESTIMATOR_POSE_KEYPOINT_NOSE, AiliaPoseEstimator.AILIA_POSE_ESTIMATOR_POSE_KEYPOINT_SHOULDER_CENTER, r);
 					DrawBone(Color.yellow, tex_width, tex_height, obj, AiliaPoseEstimator.AILIA_POSE_ESTIMATOR_POSE_KEYPOINT_SHOULDER_LEFT, AiliaPoseEstimator.AILIA_POSE_ESTIMATOR_POSE_KEYPOINT_SHOULDER_CENTER, r);
 					DrawBone(Color.green, tex_width, tex_height, obj, AiliaPoseEstimator.AILIA_POSE_ESTIMATOR_POSE_KEYPOINT_SHOULDER_RIGHT, AiliaPoseEstimator.AILIA_POSE_ESTIMATOR_POSE_KEYPOINT_SHOULDER_CENTER, r);
