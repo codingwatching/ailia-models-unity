@@ -35,8 +35,6 @@ public class AiliaMediapipePoseWorldLandmarks : IDisposable
     private int imageWidth;
     private int imageHeight;
 
-    // GPU ROI rotation angle (B2T coordinate system, differs from engine's T2B rotation)
-    private float gpuRoiRotation;
 
     public AiliaMediapipePoseWorldLandmarks(bool gpuMode, string assetPath, string jsonPath)
     {
@@ -134,7 +132,7 @@ public class AiliaMediapipePoseWorldLandmarks : IDisposable
         PoseLandmarkResult[] results;
         if (world_cordinate)
         {
-            results = engine.GetWorldResult(gpuRoiRotation);
+            results = engine.GetWorldResult();
         }
         else
         {
@@ -230,8 +228,6 @@ public class AiliaMediapipePoseWorldLandmarks : IDisposable
         float theta0 = Mathf.PI / 2f;
         float scale = dscale * Mathf.Sqrt(Mathf.Pow(xc - x1, 2) + Mathf.Pow(yc - y1, 2)) * 2;
         float angle = Mathf.Atan2(yc - y1, xc - x1) - theta0;
-        gpuRoiRotation = angle;
-
         // Set engine ROI parameters (for GetImageResult coordinate transform)
         // Use T2B keypoint coordinates for engine
         float xcT2B = box.keypoints[0][0] * tex_width;
