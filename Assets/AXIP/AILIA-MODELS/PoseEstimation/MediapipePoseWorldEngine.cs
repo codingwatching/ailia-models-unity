@@ -97,7 +97,8 @@ public struct DetectorOutput
 
 public struct EstimatorOutput
 {
-    public float[] Landmarks;  // [195] = 33 * 5 (x, y, z, visibility, presence)
+    public float[] Landmarks;       // [195] = 33 * 5 (x, y, z, visibility, presence)
+    public float[] WorldLandmarks;  // [195] = 33 * 5 (x, y, z, visibility, presence) in world coordinates
     public float Score;
 }
 
@@ -173,6 +174,8 @@ public class MediapipePoseWorldEngine
 
     // Decoded landmarks (set after DecodeLandmarks)
     public PoseLandmarkResult[] Landmarks { get; private set; }
+    // Decoded world landmarks (set after DecodeWorldLandmarks)
+    public PoseLandmarkResult[] WorldLandmarks { get; private set; }
 
     // -------------------------------------------------------
     // Sigmoid
@@ -694,6 +697,27 @@ public class MediapipePoseWorldEngine
     }
 
     // -------------------------------------------------------
+    // Decode world landmarks from estimator output (Identity_4)
+    // World landmarks use their own coordinate space (meters)
+    // -------------------------------------------------------
+    public PoseLandmarkResult[] DecodeWorldLandmarks(float[] rawOutput)
+    {
+        var landmarks = new PoseLandmarkResult[ESTIMATOR_LANDMARK_COUNT];
+        for (int i = 0; i < ESTIMATOR_LANDMARK_COUNT; ++i)
+        {
+            landmarks[i] = new PoseLandmarkResult
+            {
+                X = rawOutput[i * 5],
+                Y = rawOutput[i * 5 + 1],
+                Z = rawOutput[i * 5 + 2],
+                Confidence = Sigmoid(Math.Min(rawOutput[i * 5 + 3], rawOutput[i * 5 + 4]))
+            };
+        }
+        WorldLandmarks = landmarks;
+        return landmarks;
+    }
+
+    // -------------------------------------------------------
     // Get image coordinate results (with inverse rotation+scale+translate)
     // Matches Python: ((cos*x - sin*y) * box_size + x_center) / im_w
     // -------------------------------------------------------
@@ -726,23 +750,39 @@ public class MediapipePoseWorldEngine
     // -------------------------------------------------------
     public PoseLandmarkResult[] GetWorldResult()
     {
-        if (Landmarks == null) return null;
+        // Use world landmarks if available, otherwise fall back to image landmarks
+        var sourceLandmarks = WorldLandmarks ?? Landmarks;
+        if (sourceLandmarks == null) return null;
+
+        float cosa = Mathf.Cos(RoiRotation);
+        float sina = Mathf.Sin(RoiRotation);
+
+        // Apply rotation transform to world landmarks (matches Python)
+        var allLandmarks = new PoseLandmarkResult[ESTIMATOR_LANDMARK_COUNT];
+        for (int i = 0; i < ESTIMATOR_LANDMARK_COUNT; i++)
+        {
+            float x = sourceLandmarks[i].X;
+            float y = sourceLandmarks[i].Y;
+            allLandmarks[i] = new PoseLandmarkResult
+            {
+                X = cosa * x - sina * y,
+                Y = sina * x + cosa * y,
+                Z = sourceLandmarks[i].Z,
+                Confidence = sourceLandmarks[i].Confidence
+            };
+        }
 
         // 17 body keypoints + shoulder center + body center = 19
         var result = new PoseLandmarkResult[19];
 
         for (int i = 0; i < 17; i++)
         {
-            var lm = Landmarks[KEYPOINT_MAPPING[i]];
-            result[i] = new PoseLandmarkResult
-            {
-                X = lm.X, Y = lm.Y, Z = lm.Z, Confidence = lm.Confidence
-            };
+            result[i] = allLandmarks[KEYPOINT_MAPPING[i]];
         }
 
         // Shoulder center (index 17)
-        var ls = Landmarks[11]; // LeftShoulder
-        var rs = Landmarks[12]; // RightShoulder
+        var ls = allLandmarks[11]; // LeftShoulder
+        var rs = allLandmarks[12]; // RightShoulder
         result[17] = new PoseLandmarkResult
         {
             X = (ls.X + rs.X) / 2, Y = (ls.Y + rs.Y) / 2, Z = (ls.Z + rs.Z) / 2,
@@ -750,8 +790,8 @@ public class MediapipePoseWorldEngine
         };
 
         // Body center (index 18)
-        var lh = Landmarks[23]; // LeftHip
-        var rh = Landmarks[24]; // RightHip
+        var lh = allLandmarks[23]; // LeftHip
+        var rh = allLandmarks[24]; // RightHip
         result[18] = new PoseLandmarkResult
         {
             X = (ls.X + rs.X + lh.X + rh.X) / 4,
@@ -817,6 +857,8 @@ public class MediapipePoseWorldEngine
 
         // Step 6: Decode landmarks
         DecodeLandmarks(estOutput.Landmarks);
+        if (estOutput.WorldLandmarks != null)
+            DecodeWorldLandmarks(estOutput.WorldLandmarks);
 
         // Step 7: Return results
         if (worldCoordinate)
@@ -940,7 +982,11 @@ public class AiliaMediapipePoseBackend : IMediapipePoseBackend
         float[] landmarks = new float[MediapipePoseWorldEngine.ESTIMATOR_TENSOR_SIZE];
         estimator.GetBlobData(landmarks, landmarkBlobIndex);
 
-        return new EstimatorOutput { Landmarks = landmarks, Score = scoreBuffer[0] };
+        int worldLandmarkBlobIndex = estimator.FindBlobIndexByName("Identity_4");
+        float[] worldLandmarks = new float[MediapipePoseWorldEngine.ESTIMATOR_TENSOR_SIZE];
+        estimator.GetBlobData(worldLandmarks, worldLandmarkBlobIndex);
+
+        return new EstimatorOutput { Landmarks = landmarks, WorldLandmarks = worldLandmarks, Score = scoreBuffer[0] };
     }
 
     public void Dispose()

@@ -113,6 +113,8 @@ public class AiliaMediapipePoseWorldLandmarks : IDisposable
 
         // Decode landmarks
         engine.DecodeLandmarks(estOutput.Landmarks);
+        if (estOutput.WorldLandmarks != null)
+            engine.DecodeWorldLandmarks(estOutput.WorldLandmarks);
 
         return GetResult(false);
     }
