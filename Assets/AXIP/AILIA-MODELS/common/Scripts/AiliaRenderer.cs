@@ -13,7 +13,7 @@ namespace ailiaSDK
 	{
 		public GameObject line_panel;   //LinePanel
 		public GameObject lines;        //LinePanel/Lines
-		public GameObject line;         //Line to instiate
+		public GameObject line;         // Line to instiate
 		public GameObject text_panel;   //TextPanel
 		public GameObject text_base;    //TextPanel/Text
 		List<GameObject> textObjectBuffer = new List<GameObject>();
@@ -177,8 +177,8 @@ namespace ailiaSDK
 			//to_z = 0;
 
 			lRend.positionCount = 2;
-			lRend.startWidth = System.Math.Max((-from_z * 10 + 1), 1) * base_width;
-			lRend.endWidth = System.Math.Max((-to_z * 10 + 1), 1) * base_width;
+			lRend.startWidth = System.Math.Max((-from_z * 10 + 1),1) * base_width;
+			lRend.endWidth = System.Math.Max((-to_z * 10 + 1),1) * base_width;
 
 			Vector3 startVec = pointPos1;
 			Vector3 endVec = pointPos2;
@@ -359,10 +359,10 @@ namespace ailiaSDK
 			float cs = (float)System.Math.Cos(-theta);
 			float ss = (float)System.Math.Sin(-theta);
 
-			AppendEdgeOfRect2D(color, (int)(x + w / 2 + w / 2 * cs + h / 2 * ss), (int)(y + h / 2 + w / 2 * -ss + h / 2 * cs), tex_width, tex_height, lRend);
-			AppendEdgeOfRect2D(color, (int)(x + w / 2 - w / 2 * cs + h / 2 * ss), (int)(y + h / 2 - w / 2 * -ss + h / 2 * cs), tex_width, tex_height, lRend);
-			AppendEdgeOfRect2D(color, (int)(x + w / 2 - w / 2 * cs - h / 2 * ss), (int)(y + h / 2 - w / 2 * -ss - h / 2 * cs), tex_width, tex_height, lRend);
-			AppendEdgeOfRect2D(color, (int)(x + w / 2 + w / 2 * cs - h / 2 * ss), (int)(y + h / 2 + w / 2 * -ss - h / 2 * cs), tex_width, tex_height, lRend);
+			AppendEdgeOfRect2D(color, (int)(x + w/2 + w/2 * cs + h/2 * ss), (int)(y + h/2 + w/2 * -ss + h/2 * cs), tex_width, tex_height, lRend);
+			AppendEdgeOfRect2D(color, (int)(x + w/2 - w/2 * cs + h/2 * ss), (int)(y + h/2 - w/2 * -ss + h/2 * cs), tex_width, tex_height, lRend);
+			AppendEdgeOfRect2D(color, (int)(x + w/2 - w/2 * cs - h/2 * ss), (int)(y + h/2 - w/2 * -ss - h/2 * cs), tex_width, tex_height, lRend);
+			AppendEdgeOfRect2D(color, (int)(x + w/2 + w/2 * cs - h/2 * ss), (int)(y + h/2 + w/2 * -ss - h/2 * cs), tex_width, tex_height, lRend);
 
 			newLine.SetActive(true);
 		}
@@ -703,4 +703,4 @@ namespace ailiaSDK
 		}
 
 	}
-} 
+} 
