@@ -645,18 +645,8 @@ MonoBehaviour:
   line: {fileID: 0}
   text_panel: {fileID: 1813464806}
   text_base: {fileID: 1813464805}
-  spheres: {fileID: 978718655}
-  sphere: {fileID: 247495983}
-  sphereObjectBuffer: []
-  sphereObjectBufferIndex: 0
-  lines3D: {fileID: 968090148}
-  line3D: {fileID: 1624314557}
-  axisSphereObjectBuffer: []
-  axisSphereObjectBufferIndex: 0
-  drawPos: {x: 0, y: 0, z: 140}
-  scale: 20
-  time: 0
   ailiaModelType: 2
+  renderer3D: {fileID: 1794486150}
   UICanvas: {fileID: 1821187748}
   gpu_mode: 0
   video_mode: 0
@@ -806,6 +796,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1794486149}
+  - component: {fileID: 1794486150}
   m_Layer: 0
   m_Name: Landmark3D
   m_TagString: Untagged
@@ -830,6 +821,29 @@ Transform:
   m_Father: {fileID: 0}
   m_RootOrder: 6
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1794486150
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1794486148}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a3d1b2c4e5f6789012345678abcdef90, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  spheres: {fileID: 978718655}
+  sphere: {fileID: 247495983}
+  sphereObjectBuffer: []
+  sphereObjectBufferIndex: 0
+  lines3D: {fileID: 968090148}
+  line3D: {fileID: 1624314557}
+  axisSphereObjectBuffer: []
+  axisSphereObjectBufferIndex: 0
+  drawPos: {x: 0, y: 0, z: 140}
+  scale: 20
+  time: 0
 --- !u!1001 &1813464802
 PrefabInstance:
   m_ObjectHideFlags: 0
