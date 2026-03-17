@@ -173,7 +173,7 @@ public class MediapipePoseWorldEngine
     public float RoiCenterX { get; private set; }
     public float RoiCenterY { get; private set; }
     public float RoiBoxSize { get; private set; }
-    public float RoiRotation { get; private set; }
+    public float RoiRotation { get; set; }
 
     // Decoded landmarks (set after DecodeLandmarks)
     public PoseLandmarkResult[] Landmarks { get; private set; }

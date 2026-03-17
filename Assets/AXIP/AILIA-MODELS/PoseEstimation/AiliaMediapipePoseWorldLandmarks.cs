@@ -240,6 +240,10 @@ public class AiliaMediapipePoseWorldLandmarks : IDisposable
         var dummyPixels = new Color32[1];
         engine.ExtractROI(dummyPixels, tex_width, tex_height, box);
 
+        // Override RoiRotation with the GPU-computed angle (B2T coordinate system)
+        // ExtractROI computes rotation in T2B space, but the GPU cuts ROI in B2T space
+        engine.RoiRotation = angle;
+
         // Compute affine transform matrix for GPU shader
         Vector2[] points = new Vector2[]
         {
