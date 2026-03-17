@@ -10,8 +10,11 @@ using SixLabors.ImageSharp.PixelFormats;
 /// <summary>
 /// Test to verify DrawBone3D and DrawAxis3D coordinate systems.
 /// Uses real world landmark data to simulate what Unity renders.
-/// Validates that Y-negation fixes the upside-down skeleton issue
-/// (MediaPipe world landmarks use Y-down, Unity uses Y-up).
+///
+/// Unity screen coordinate: positive Y = DOWN on screen.
+/// MediaPipe world landmarks: Y-down (positive Y = downward in real world).
+/// Therefore skeleton orientation is naturally correct (no Y-flip needed).
+/// Grid should be placed at y_max (foot level = bottom of screen).
 /// </summary>
 [TestFixture]
 public class DrawAxis3DTest
@@ -63,12 +66,10 @@ public class DrawAxis3DTest
         new[] { ANKLE_RIGHT, KNEE_RIGHT },
     };
 
-    // Left-side keypoints (drawn in cyan)
     static readonly HashSet<int> LEFT_INDICES = new HashSet<int> {
         EYE_LEFT, EAR_LEFT, SHOULDER_LEFT, ELBOW_LEFT, WRIST_LEFT,
         HIP_LEFT, KNEE_LEFT, ANKLE_LEFT
     };
-    // Right-side keypoints (drawn in orange)
     static readonly HashSet<int> RIGHT_INDICES = new HashSet<int> {
         EYE_RIGHT, EAR_RIGHT, SHOULDER_RIGHT, ELBOW_RIGHT, WRIST_RIGHT,
         HIP_RIGHT, KNEE_RIGHT, ANKLE_RIGHT
@@ -160,7 +161,6 @@ public class DrawAxis3DTest
 
     private static void DrawLine(Image<Rgba32> img, int x0, int y0, int x1, int y1, Rgba32 color, int thickness = 1)
     {
-        // Bresenham's line algorithm with thickness
         for (int t = -thickness / 2; t <= thickness / 2; t++)
         {
             int dx = Math.Abs(x1 - x0), dy = Math.Abs(y1 - y0);
@@ -211,10 +211,9 @@ public class DrawAxis3DTest
                 }
     }
 
-    private static void DrawText(Image<Rgba32> img, int x, int y, string text, Rgba32 color)
+    private static void DrawText(Image<Rgba32> img, int x, int y, string text, Rgba32 color, int fontScale = 1)
     {
-        // Simple 3x5 bitmap font for digits, letters, and basic symbols
-        var glyphs = new System.Collections.Generic.Dictionary<char, string[]> {
+        var glyphs = new Dictionary<char, string[]> {
             {'0', new[]{"###","# #","# #","# #","###"}},
             {'1', new[]{" # "," # "," # "," # "," # "}},
             {'2', new[]{"###","  #","###","#  ","###"}},
@@ -246,18 +245,31 @@ public class DrawAxis3DTest
             {'R', new[]{"###","# #","###","## ","# #"}},
             {'I', new[]{"###"," # "," # "," # ","###"}},
             {'D', new[]{"## ","# #","# #","# #","## "}},
+            {'B', new[]{"## ","# #","## ","# #","## "}},
+            {'O', new[]{"###","# #","# #","# #","###"}},
+            {'F', new[]{"###","#  ","###","#  ","#  "}},
+            {'X', new[]{"# #","# #"," # ","# #","# #"}},
+            {'E', new[]{"###","#  ","###","#  ","###"}},
+            {'T', new[]{"###"," # "," # "," # "," # "}},
+            {'L', new[]{"#  ","#  ","#  ","#  ","###"}},
+            {'C', new[]{"###","#  ","#  ","#  ","###"}},
+            {'M', new[]{"# #","###","###","# #","# #"}},
+            {'Y', new[]{"# #","# #","###"," # "," # "}},
+            {'U', new[]{"# #","# #","# #","# #","###"}},
             {'-', new[]{"   ","   ","###","   ","   "}},
             {'.', new[]{"   ","   ","   ","   "," # "}},
             {' ', new[]{"   ","   ","   ","   ","   "}},
             {'(', new[]{" # ","#  ","#  ","#  "," # "}},
             {')', new[]{" # ","  #","  #","  #"," # "}},
-            {'Y', new[]{"# #","# #","###"," # "," # "}},
             {':', new[]{"   "," # ","   "," # ","   "}},
             {'=', new[]{"   ","###","   ","###","   "}},
             {'>', new[]{"#  "," # ","  #"," # ","#  "}},
             {'<', new[]{"  #"," # ","#  "," # ","  #"}},
             {'~', new[]{"   ","   "," ##","## ","   "}},
             {'_', new[]{"   ","   ","   ","   ","###"}},
+            {'+', new[]{"   "," # ","###"," # ","   "}},
+            {'|', new[]{" # "," # "," # "," # "," # "}},
+            {'/', new[]{"  #","  #"," # ","#  ","#  "}},
         };
         int cx = x;
         foreach (char c in text)
@@ -268,25 +280,32 @@ public class DrawAxis3DTest
                     for (int col = 0; col < g[row].Length; col++)
                         if (g[row][col] == '#')
                         {
-                            int px = cx + col, py = y + row;
-                            if (px >= 0 && px < img.Width && py >= 0 && py < img.Height)
-                                img[px, py] = color;
+                            for (int sy = 0; sy < fontScale; sy++)
+                                for (int sx = 0; sx < fontScale; sx++)
+                                {
+                                    int px = cx + col * fontScale + sx;
+                                    int py = y + row * fontScale + sy;
+                                    if (px >= 0 && px < img.Width && py >= 0 && py < img.Height)
+                                        img[px, py] = color;
+                                }
                         }
             }
-            cx += 4; // 3 wide + 1 spacing
+            cx += (3 + 1) * fontScale;
         }
     }
 
     /// <summary>
-    /// Renders DrawBone3D + DrawAxis3D simulation to an image.
-    /// Reproduces the same coordinate transforms as AiliaRenderer.
+    /// Renders skeleton + grid/box simulation to an image.
+    /// Screen coordinate: positive Y = DOWN (matching Unity's actual rendering).
+    /// gridMode: "y_min" = original broken code, "y_max" = fixed code.
     /// </summary>
-    private void RenderSkeletonImage(Point3D[] pts, bool flipY, float rotationAngle, string outputPath, string title)
+    private void RenderSkeletonImage(Point3D[] pts, string gridMode, float rotationAngle,
+        string outputPath, string title)
     {
-        int W = 600, H = 600;
+        int W = 600, H = 700;
         var img = new Image<Rgba32>(W, H);
 
-        // Background
+        // Dark background
         for (int y = 0; y < H; y++)
             for (int x = 0; x < W; x++)
                 img[x, y] = new Rgba32(32, 32, 32, 255);
@@ -296,24 +315,38 @@ public class DrawAxis3DTest
         float hip_cy = (pts[HIP_LEFT].y + pts[HIP_RIGHT].y) / 2f;
         float hip_cz = (pts[HIP_LEFT].z + pts[HIP_RIGHT].z) / 2f;
 
-        // Hip-center and optionally flip Y (same as DrawBone3D/DrawAxis3D)
+        // Hip-centered coordinates (no Y-flip, matching DrawBone3D)
         float[] cx_arr = new float[19], cy_arr = new float[19], cz_arr = new float[19];
         for (int i = 0; i < 19; i++)
         {
             cx_arr[i] = pts[i].x - hip_cx;
-            cy_arr[i] = flipY ? -(pts[i].y - hip_cy) : (pts[i].y - hip_cy);
+            cy_arr[i] = pts[i].y - hip_cy;  // No Y-flip
             cz_arr[i] = pts[i].z - hip_cz;
         }
 
         // Compute DrawAxis3D parameters
-        float abs_max = 0f, y_min = 1f;
+        float abs_max = 0f, y_min = 1f, y_max = -1f;
         for (int i = 0; i < 19; i++)
         {
             abs_max = Math.Max(abs_max, Math.Max(Math.Abs(cx_arr[i]),
                 Math.Max(Math.Abs(cy_arr[i]), Math.Abs(cz_arr[i]))));
             y_min = Math.Min(y_min, cy_arr[i]);
+            y_max = Math.Max(y_max, cy_arr[i]);
         }
         float scale = abs_max + 0.1f;
+
+        // Grid and box position based on mode
+        float gridY, boxEndY;
+        if (gridMode == "y_max")
+        {
+            gridY = y_max;
+            boxEndY = y_max + scale * 2;  // Extend further down (larger Y = lower on screen)
+        }
+        else // "y_min" - original broken code
+        {
+            gridY = y_min;
+            boxEndY = y_min - scale * 2;  // Extend upward (smaller Y = higher on screen)
+        }
 
         // Apply Y-axis rotation (same as DrawBone3D)
         float cosR = (float)Math.Cos(rotationAngle);
@@ -325,115 +358,100 @@ public class DrawAxis3DTest
             rz_arr[i] = -cx_arr[i] * sinR + cz_arr[i] * cosR;
         }
 
-        // Orthographic projection: screen X = rotated X, screen Y = centered Y
-        // Find the total bounding box including grid/box
-        float boxBottom = y_min - scale * 2;
-        float viewYMin = Math.Min(boxBottom, y_min);
-        float viewYMax = 0f;
-        for (int i = 0; i < 19; i++)
-            viewYMax = Math.Max(viewYMax, cy_arr[i]);
-        viewYMax = Math.Max(viewYMax, y_min); // grid is also visible
+        // Screen projection: Unity renders positive Y DOWNWARD on screen
+        // So screen_y = world_y (directly proportional, no negation)
+        float allYMin = Math.Min(y_min, Math.Min(gridY, boxEndY));
+        float allYMax = Math.Max(y_max, Math.Max(gridY, boxEndY));
+        float viewXMin = -scale * 1.2f, viewXMax = scale * 1.2f;
+        float viewYMin = allYMin - 0.1f, viewYMax = allYMax + 0.1f;
 
-        float viewXMin = -scale, viewXMax = scale;
-        // Add margin
-        float marginX = (viewXMax - viewXMin) * 0.1f;
-        float marginY = (viewYMax - viewYMin) * 0.1f;
-        viewXMin -= marginX; viewXMax += marginX;
-        viewYMin -= marginY; viewYMax += marginY;
-
-        // Scale to fit image
-        float scaleX = (W - 40) / (viewXMax - viewXMin);
-        float scaleY = (H - 40) / (viewYMax - viewYMin);
+        float scaleX = (W - 60) / (viewXMax - viewXMin);
+        float scaleY = (H - 100) / (viewYMax - viewYMin);
         float viewScale = Math.Min(scaleX, scaleY);
 
-        // Center in image
         float offsetX = W / 2f - (viewXMin + viewXMax) / 2f * viewScale;
-        float offsetY = H / 2f + (viewYMin + viewYMax) / 2f * viewScale; // Y is flipped for screen
+        // Positive Y = down on screen (no negation)
+        float offsetY = 50 - viewYMin * viewScale;
 
-        // Project 3D to screen (Unity Y-up -> screen Y-down)
         Func<float, float, (int, int)> toScreen = (wx, wy) => {
             int sx = (int)(wx * viewScale + offsetX);
-            int sy = (int)(-wy * viewScale + offsetY);
+            int sy = (int)(wy * viewScale + offsetY);  // Direct mapping: +Y = down
             return (sx, sy);
         };
 
-        // ======== Draw DrawAxis3D grid and box ========
-        // Rotate grid corners around Y axis
+        // Rotate grid/box corner XZ around Y axis
         Func<float, float, (float, float)> rotXZ = (gx, gz) => {
             return (gx * cosR + gz * sinR, -gx * sinR + gz * cosR);
         };
 
-        // Grid corners (top face at y_min)
-        var gridCorners = new (float x, float z)[] {
-            rotXZ(-scale, -scale), rotXZ(scale, -scale),
-            rotXZ(scale, scale), rotXZ(-scale, scale)
-        };
-        // Box bottom corners (at y_min - scale*2)
-        var boxCorners = new (float x, float z)[] {
-            rotXZ(-scale, -scale), rotXZ(scale, -scale),
-            rotXZ(scale, scale), rotXZ(-scale, scale)
-        };
+        var gridCorners = new (float x, float z)[4];
+        var boxCorners = new (float x, float z)[4];
+        float[] cornerX = { -scale, scale, scale, -scale };
+        float[] cornerZ = { -scale, -scale, scale, scale };
+        for (int i = 0; i < 4; i++)
+        {
+            gridCorners[i] = rotXZ(cornerX[i], cornerZ[i]);
+            boxCorners[i] = rotXZ(cornerX[i], cornerZ[i]);
+        }
 
         var gridColor = new Rgba32(0, 92, 0, 255);
         var gridLineColor = new Rgba32(255, 255, 255, 180);
-        var boxLineColor = new Rgba32(255, 255, 255, 100);
+        var boxLineColor = new Rgba32(255, 255, 255, 80);
         var innerGridColor = new Rgba32(255, 255, 255, 40);
 
         // Draw box vertical edges
         for (int i = 0; i < 4; i++)
         {
-            var (sx1, sy1) = toScreen(gridCorners[i].x, y_min);
-            var (sx2, sy2) = toScreen(boxCorners[i].x, boxBottom);
+            var (sx1, sy1) = toScreen(gridCorners[i].x, gridY);
+            var (sx2, sy2) = toScreen(boxCorners[i].x, boxEndY);
             DrawLine(img, sx1, sy1, sx2, sy2, boxLineColor, 1);
         }
 
-        // Draw box bottom edges
+        // Draw box end face edges
         for (int i = 0; i < 4; i++)
         {
             int j = (i + 1) % 4;
-            var (sx1, sy1) = toScreen(boxCorners[i].x, boxBottom);
-            var (sx2, sy2) = toScreen(boxCorners[j].x, boxBottom);
+            var (sx1, sy1) = toScreen(boxCorners[i].x, boxEndY);
+            var (sx2, sy2) = toScreen(boxCorners[j].x, boxEndY);
             DrawLine(img, sx1, sy1, sx2, sy2, boxLineColor, 1);
         }
 
-        // Draw grid top edges
+        // Draw grid face edges
         for (int i = 0; i < 4; i++)
         {
             int j = (i + 1) % 4;
-            var (sx1, sy1) = toScreen(gridCorners[i].x, y_min);
-            var (sx2, sy2) = toScreen(gridCorners[j].x, y_min);
+            var (sx1, sy1) = toScreen(gridCorners[i].x, gridY);
+            var (sx2, sy2) = toScreen(gridCorners[j].x, gridY);
             DrawLine(img, sx1, sy1, sx2, sy2, gridLineColor, 2);
         }
 
-        // Draw inner grid lines on top face
+        // Draw inner grid lines
         float[] gridFracs = { -0.75f, -0.5f, -0.25f, 0f, 0.25f, 0.5f, 0.75f };
         foreach (float f in gridFracs)
         {
-            // Lines parallel to Z
-            var (gx1, gz1) = rotXZ(scale * f, -scale);
-            var (gx2, gz2) = rotXZ(scale * f, scale);
-            var (s1x, s1y) = toScreen(gx1, y_min);
-            var (s2x, s2y) = toScreen(gx2, y_min);
+            var (gx1, _) = rotXZ(scale * f, -scale);
+            var (gx2, _) = rotXZ(scale * f, scale);
+            var (s1x, s1y) = toScreen(gx1, gridY);
+            var (s2x, s2y) = toScreen(gx2, gridY);
             DrawLine(img, s1x, s1y, s2x, s2y, innerGridColor, 1);
 
-            // Lines parallel to X
-            (gx1, gz1) = rotXZ(-scale, scale * f);
-            (gx2, gz2) = rotXZ(scale, scale * f);
-            (s1x, s1y) = toScreen(gx1, y_min);
-            (s2x, s2y) = toScreen(gx2, y_min);
+            (gx1, _) = rotXZ(-scale, scale * f);
+            (gx2, _) = rotXZ(scale, scale * f);
+            (s1x, s1y) = toScreen(gx1, gridY);
+            (s2x, s2y) = toScreen(gx2, gridY);
             DrawLine(img, s1x, s1y, s2x, s2y, innerGridColor, 1);
         }
 
-        // Draw grid corner spheres
+        // Grid corner spheres
         for (int i = 0; i < 4; i++)
         {
-            var (sx, sy) = toScreen(gridCorners[i].x, y_min);
+            var (sx, sy) = toScreen(gridCorners[i].x, gridY);
             DrawCircle(img, sx, sy, 4, gridColor);
-            (sx, sy) = toScreen(boxCorners[i].x, boxBottom);
+            (sx, sy) = toScreen(boxCorners[i].x, boxEndY);
             DrawCircle(img, sx, sy, 4, gridColor);
         }
 
-        // ======== Draw skeleton (DrawBone3D) ========
+        // ======== Draw skeleton ========
         var boneColor = new Rgba32(255, 255, 255, 255);
         var leftColor = new Rgba32(0, 179, 255, 255);
         var rightColor = new Rgba32(248, 123, 0, 255);
@@ -444,19 +462,20 @@ public class DrawAxis3DTest
             var (sx1, sy1) = toScreen(rx_arr[from], cy_arr[from]);
             var (sx2, sy2) = toScreen(rx_arr[to], cy_arr[to]);
 
-            // Use same color logic as AiliaPoseEstimatorsSample
             Rgba32 lineColor = boneColor;
-            if (LEFT_INDICES.Contains(from) || LEFT_INDICES.Contains(to))
+            if (LEFT_INDICES.Contains(from) && LEFT_INDICES.Contains(to))
                 lineColor = leftColor;
-            if (RIGHT_INDICES.Contains(from) || RIGHT_INDICES.Contains(to))
+            else if (RIGHT_INDICES.Contains(from) && RIGHT_INDICES.Contains(to))
                 lineColor = rightColor;
-            if (bone[0] == NOSE || bone[0] == SHOULDER_CENTER || bone[0] == HIP_LEFT && bone[1] == HIP_RIGHT)
-                lineColor = boneColor;
+            else if (LEFT_INDICES.Contains(from) || LEFT_INDICES.Contains(to))
+                lineColor = leftColor;
+            else if (RIGHT_INDICES.Contains(from) || RIGHT_INDICES.Contains(to))
+                lineColor = rightColor;
 
             DrawLine(img, sx1, sy1, sx2, sy2, lineColor, 2);
         }
 
-        // Draw keypoint spheres
+        // Keypoint spheres
         for (int i = 0; i < 19; i++)
         {
             var (sx, sy) = toScreen(rx_arr[i], cy_arr[i]);
@@ -466,41 +485,37 @@ public class DrawAxis3DTest
             DrawCircle(img, sx, sy, 4, sphereColor);
         }
 
-        // ======== Draw labels ========
+        // ======== Labels ========
         var labelColor = new Rgba32(200, 200, 200, 255);
-
-        // Label nose
         {
             var (sx, sy) = toScreen(rx_arr[NOSE], cy_arr[NOSE]);
-            DrawText(img, sx + 6, sy - 3, "Nose", labelColor);
+            DrawText(img, sx + 6, sy - 8, "Nose", labelColor);
         }
-        // Label ankles
         {
             var (sx, sy) = toScreen(rx_arr[ANKLE_LEFT], cy_arr[ANKLE_LEFT]);
             DrawText(img, sx + 6, sy - 3, "Ankle", labelColor);
         }
-        // Label hip
         {
             var (sx, sy) = toScreen(rx_arr[BODY_CENTER], cy_arr[BODY_CENTER]);
             DrawText(img, sx + 6, sy - 3, "Hip", labelColor);
         }
 
-        // Title
-        DrawText(img, 10, 10, title, new Rgba32(255, 255, 100, 255));
-
         // Grid label
         {
-            var (sx, sy) = toScreen(gridCorners[0].x, y_min);
+            var (sx, sy) = toScreen(gridCorners[1].x, gridY);
             DrawText(img, sx + 8, sy - 3, "GRID", new Rgba32(0, 200, 0, 255));
         }
 
-        // Y-axis direction indicator
+        // Title (larger font)
+        DrawText(img, 10, 10, title, new Rgba32(255, 255, 100, 255), 2);
+
+        // Y-axis direction indicator (arrow pointing DOWN = positive Y)
         var arrowColor = new Rgba32(255, 80, 80, 255);
         int arrowX = W - 40;
-        DrawLine(img, arrowX, H - 60, arrowX, H - 20, arrowColor, 2);
-        DrawLine(img, arrowX, H - 60, arrowX - 5, H - 50, arrowColor, 2);
-        DrawLine(img, arrowX, H - 60, arrowX + 5, H - 50, arrowColor, 2);
-        DrawText(img, arrowX - 4, H - 72, "Y", arrowColor);
+        DrawLine(img, arrowX, 40, arrowX, 80, arrowColor, 2);
+        DrawLine(img, arrowX, 80, arrowX - 5, 70, arrowColor, 2);
+        DrawLine(img, arrowX, 80, arrowX + 5, 70, arrowColor, 2);
+        DrawText(img, arrowX - 6, 25, "+Y", arrowColor);
 
         img.SaveAsPng(outputPath);
         Console.WriteLine($"  Saved: {outputPath}");
@@ -509,40 +524,78 @@ public class DrawAxis3DTest
     // ========== Tests ==========
 
     [Test]
-    public void TestDrawAxis3D_OriginalCoords_SkeletonIsUpsideDown()
+    public void TestUnityCoords_SkeletonOrientation()
     {
         if (!Directory.Exists(REFERENCE_DIR))
             Assert.Ignore("Reference data not found");
 
         var pts = GetWorldPoints();
-
-        // Hip center (origin for DrawBone3D/DrawAxis3D)
         float hip_cy = (pts[HIP_LEFT].y + pts[HIP_RIGHT].y) / 2f;
 
         float nose_cy = pts[NOSE].y - hip_cy;
         float lAnkle_cy = pts[ANKLE_LEFT].y - hip_cy;
         float rAnkle_cy = pts[ANKLE_RIGHT].y - hip_cy;
+        float avg_ankle = (lAnkle_cy + rAnkle_cy) / 2f;
 
-        Console.WriteLine("=== Original coordinates (no Y-flip) ===");
-        Console.WriteLine($"  Nose Y = {nose_cy:F4}");
-        Console.WriteLine($"  L_Ankle Y = {lAnkle_cy:F4}");
-        Console.WriteLine($"  R_Ankle Y = {rAnkle_cy:F4}");
+        Console.WriteLine("=== Unity screen coords (positive Y = DOWN) ===");
+        Console.WriteLine($"  Nose centered Y     = {nose_cy:F4} (small = top of screen)");
+        Console.WriteLine($"  L_Ankle centered Y  = {lAnkle_cy:F4} (large = bottom of screen)");
+        Console.WriteLine($"  R_Ankle centered Y  = {rAnkle_cy:F4} (large = bottom of screen)");
 
-        // MediaPipe world landmarks are Y-down, so ankles have LARGER Y than nose
-        // In Unity Y-up, this means ankles appear ABOVE nose = upside down
-        Assert.That(Math.Max(lAnkle_cy, rAnkle_cy), Is.GreaterThan(nose_cy),
-            "Without Y-flip, ankles should have larger Y than nose (upside-down in Unity)");
+        // MediaPipe Y-down: ankles have larger Y than nose
+        // Unity screen Y-down: larger Y = lower on screen
+        // Therefore: ankles below nose on screen = correct orientation (no Y-flip needed)
+        Assert.That(avg_ankle, Is.GreaterThan(nose_cy),
+            "Ankles should have larger Y (displayed below nose on Unity screen)");
+
+        Console.WriteLine("  => Skeleton is correctly oriented (head at top, feet at bottom)");
     }
 
     [Test]
-    public void TestDrawAxis3D_WithYFlip_SkeletonIsCorrect()
+    public void TestDrawAxis3D_GridAtYMin_IsWrong()
     {
         if (!Directory.Exists(REFERENCE_DIR))
             Assert.Ignore("Reference data not found");
 
         var pts = GetWorldPoints();
+        float hip_cy = (pts[HIP_LEFT].y + pts[HIP_RIGHT].y) / 2f;
 
-        // Hip center
+        float y_min = float.MaxValue, y_max = float.MinValue;
+        for (int i = 0; i < 19; i++)
+        {
+            float cy = pts[i].y - hip_cy;
+            y_min = Math.Min(y_min, cy);
+            y_max = Math.Max(y_max, cy);
+        }
+
+        float nose_cy = pts[NOSE].y - hip_cy;
+        float avg_ankle = ((pts[ANKLE_LEFT].y - hip_cy) + (pts[ANKLE_RIGHT].y - hip_cy)) / 2f;
+
+        Console.WriteLine("=== Original code: grid at y_min ===");
+        Console.WriteLine($"  y_min = {y_min:F4} (head/wrist area)");
+        Console.WriteLine($"  y_max = {y_max:F4} (ankle area)");
+        Console.WriteLine($"  Nose Y = {nose_cy:F4}");
+        Console.WriteLine($"  Avg ankle Y = {avg_ankle:F4}");
+        Console.WriteLine($"  Grid Y = {y_min:F4} => displayed at TOP of screen (WRONG!)");
+        Console.WriteLine($"  Box extends to {y_min - y_min * 2:F4} => even further UP (WRONG!)");
+
+        // y_min is near nose/head (small Y = top of screen)
+        // Grid at y_min means grid is at the TOP, not at the feet
+        Assert.That(y_min, Is.LessThan(nose_cy + 0.01f),
+            "y_min should be near head level (top of screen) - confirming grid is in wrong position");
+        Assert.That(y_min, Is.LessThan(avg_ankle),
+            "y_min (grid) should be above ankles on screen - confirming grid at top, not bottom");
+
+        Console.WriteLine("  => CONFIRMED: Grid at y_min appears at TOP (above skeleton)");
+    }
+
+    [Test]
+    public void TestDrawAxis3D_GridAtYMax_IsCorrect()
+    {
+        if (!Directory.Exists(REFERENCE_DIR))
+            Assert.Ignore("Reference data not found");
+
+        var pts = GetWorldPoints();
         float hip_cx = (pts[HIP_LEFT].x + pts[HIP_RIGHT].x) / 2f;
         float hip_cy = (pts[HIP_LEFT].y + pts[HIP_RIGHT].y) / 2f;
         float hip_cz = (pts[HIP_LEFT].z + pts[HIP_RIGHT].z) / 2f;
@@ -552,21 +605,14 @@ public class DrawAxis3DTest
             "L_Hip", "R_Hip", "L_Knee", "R_Knee", "L_Ankle", "R_Ankle",
             "ShoulderCenter", "BodyCenter" };
 
-        // Simulate DrawBone3D/DrawAxis3D with Y-flip fix: cy = -(y - origin_y)
-        Console.WriteLine("=== With Y-flip: cy = -(y - origin_y) ===");
+        Console.WriteLine("=== Fixed code: grid at y_max ===");
 
-        float abs_max = 0f;
-        float y_min = 1f;
-        float y_max = -1f;
-        float[] cy_arr = new float[19];
-
+        float abs_max = 0f, y_min = 1f, y_max = -1f;
         for (int i = 0; i < 19; i++)
         {
             float cx = pts[i].x - hip_cx;
-            float cy = -(pts[i].y - hip_cy);  // Y-FLIP
+            float cy = pts[i].y - hip_cy;
             float cz = pts[i].z - hip_cz;
-
-            cy_arr[i] = cy;
             abs_max = Math.Max(abs_max, Math.Max(Math.Abs(cx), Math.Max(Math.Abs(cy), Math.Abs(cz))));
             y_min = Math.Min(y_min, cy);
             y_max = Math.Max(y_max, cy);
@@ -574,54 +620,32 @@ public class DrawAxis3DTest
         }
 
         float scale = abs_max + 0.1f;
-        float nose_cy = cy_arr[NOSE];
-        float lAnkle_cy = cy_arr[ANKLE_LEFT];
-        float rAnkle_cy = cy_arr[ANKLE_RIGHT];
+        float nose_cy = pts[NOSE].y - hip_cy;
+        float avg_ankle = ((pts[ANKLE_LEFT].y - hip_cy) + (pts[ANKLE_RIGHT].y - hip_cy)) / 2f;
+        float avg_shoulder = ((pts[SHOULDER_LEFT].y - hip_cy) + (pts[SHOULDER_RIGHT].y - hip_cy)) / 2f;
+        float avg_knee = ((pts[KNEE_LEFT].y - hip_cy) + (pts[KNEE_RIGHT].y - hip_cy)) / 2f;
 
-        Console.WriteLine($"\n  Skeleton Y range: [{y_min:F4}, {y_max:F4}]");
-        Console.WriteLine($"  Nose Y = {nose_cy:F4}");
-        Console.WriteLine($"  L_Ankle Y = {lAnkle_cy:F4}");
-        Console.WriteLine($"  R_Ankle Y = {rAnkle_cy:F4}");
-
-        // With Y-flip, nose should be ABOVE ankles in Unity (nose Y > ankle Y)
-        Assert.That(nose_cy, Is.GreaterThan(Math.Max(lAnkle_cy, rAnkle_cy)),
-            "With Y-flip, nose should have larger Y than ankles (correct orientation)");
-
-        // Verify anatomical ordering: nose > shoulders > hips > knees > ankles
-        float lShoulder_cy = cy_arr[SHOULDER_LEFT];
-        float rShoulder_cy = cy_arr[SHOULDER_RIGHT];
-        float lKnee_cy = cy_arr[KNEE_LEFT];
-        float rKnee_cy = cy_arr[KNEE_RIGHT];
-
-        float avg_shoulder = (lShoulder_cy + rShoulder_cy) / 2f;
-        float avg_knee = (lKnee_cy + rKnee_cy) / 2f;
-        float avg_ankle = (lAnkle_cy + rAnkle_cy) / 2f;
-
-        Console.WriteLine($"\n  Anatomical ordering check:");
-        Console.WriteLine($"    Nose={nose_cy:F4} > Shoulders={avg_shoulder:F4} > Hips~0 > Knees={avg_knee:F4} > Ankles={avg_ankle:F4}");
-
-        Assert.That(nose_cy, Is.GreaterThan(avg_shoulder), "Nose should be above shoulders");
-        Assert.That(avg_shoulder, Is.GreaterThan(0f).Within(0.1f), "Shoulders should be above hip center");
-        Assert.That(avg_knee, Is.LessThan(0f), "Knees should be below hip center");
-        Assert.That(avg_ankle, Is.LessThan(avg_knee), "Ankles should be below knees");
-
-        // Verify DrawAxis3D grid placement
-        Console.WriteLine($"\n=== DrawAxis3D grid (with Y-flip) ===");
-        Console.WriteLine($"  y_min = {y_min:F4} (ankle level = ground)");
+        Console.WriteLine($"\n  Screen ordering (small Y = top, large Y = bottom):");
+        Console.WriteLine($"    Nose={nose_cy:F4} < Shoulders={avg_shoulder:F4} < Hips~0 < Knees={avg_knee:F4} < Ankles={avg_ankle:F4}");
+        Console.WriteLine($"\n  y_max = {y_max:F4} (ankle level = bottom of screen = ground)");
         Console.WriteLine($"  scale = {scale:F4}");
-        Console.WriteLine($"  Grid floor Y = {y_min:F4}");
-        Console.WriteLine($"  Box bottom Y = {y_min - scale * 2:F4} (pedestal below ground)");
-        Console.WriteLine($"  Skeleton top Y = {y_max:F4} (above grid = standing on ground)");
+        Console.WriteLine($"  Grid Y = {y_max:F4} => at ankle level (ground plane)");
+        Console.WriteLine($"  Box extends to {y_max + scale * 2:F4} => below ground (pedestal)");
 
-        // Grid (y_min) should be at or below the ankles (feet = ground level)
-        Assert.That(y_min, Is.LessThanOrEqualTo(avg_ankle + 0.01f),
-            "Grid floor should be at or below ankle level");
+        // Verify screen ordering (top to bottom)
+        Assert.That(nose_cy, Is.LessThan(avg_shoulder + 0.05f), "Nose above shoulders on screen");
+        Assert.That(avg_knee, Is.GreaterThan(0f), "Knees below hip center on screen");
+        Assert.That(avg_ankle, Is.GreaterThan(avg_knee), "Ankles below knees on screen");
 
-        // Skeleton top (y_max) should be above the grid
-        Assert.That(y_max, Is.GreaterThan(y_min),
-            "Skeleton top should be above the grid floor");
+        // Grid at y_max should be at or below ankle level
+        Assert.That(y_max, Is.GreaterThanOrEqualTo(avg_ankle - 0.01f),
+            "Grid (y_max) should be at or below ankle level (bottom of screen)");
 
-        Console.WriteLine("\n  RESULT: With Y-flip, skeleton is upright and grid is at feet level.");
+        // Box extends further down
+        Assert.That(y_max + scale * 2, Is.GreaterThan(y_max),
+            "Box should extend below the grid (further down on screen)");
+
+        Console.WriteLine("\n  => CORRECT: Grid at bottom (feet), pedestal extends below");
     }
 
     [Test]
@@ -631,28 +655,26 @@ public class DrawAxis3DTest
             Assert.Ignore("Reference data not found");
 
         var pts = GetWorldPoints();
-        float rotAngle = (float)(Math.PI / 6); // 30 degrees for good 3D view
+        float rotAngle = (float)(Math.PI / 6); // 30 degrees for 3D view
 
-        // Render without Y-flip (broken)
-        string brokenPath = Path.Combine(OUTPUT_DIR, "skeleton_no_yflip.png");
-        RenderSkeletonImage(pts, flipY: false, rotAngle, brokenPath,
-            "No Y-flip (BROKEN)");
+        // Render with y_min grid (original broken code)
+        string brokenPath = Path.Combine(OUTPUT_DIR, "skeleton_ymin_broken.png");
+        RenderSkeletonImage(pts, "y_min", rotAngle, brokenPath,
+            "BROKEN: Grid at y_min (top)");
 
-        // Render with Y-flip (fixed)
-        string fixedPath = Path.Combine(OUTPUT_DIR, "skeleton_with_yflip.png");
-        RenderSkeletonImage(pts, flipY: true, rotAngle, fixedPath,
-            "With Y-flip (FIXED)");
+        // Render with y_max grid (fixed code)
+        string fixedPath = Path.Combine(OUTPUT_DIR, "skeleton_ymax_fixed.png");
+        RenderSkeletonImage(pts, "y_max", rotAngle, fixedPath,
+            "FIXED: Grid at y_max (bottom)");
 
-        Console.WriteLine($"\n=== Rendered images ===");
-        Console.WriteLine($"  Broken (no Y-flip): {brokenPath}");
-        Console.WriteLine($"  Fixed  (Y-flip):    {fixedPath}");
-        Console.WriteLine($"\n  In the FIXED image:");
-        Console.WriteLine($"    - Nose should be at the TOP");
-        Console.WriteLine($"    - Ankles should be at the BOTTOM");
-        Console.WriteLine($"    - Grid (green) should be below the ankles (ground plane)");
-        Console.WriteLine($"    - Box/pedestal should extend BELOW the grid");
+        Console.WriteLine($"\n=== Rendered images (Unity Y-down screen) ===");
+        Console.WriteLine($"  Broken: {brokenPath}");
+        Console.WriteLine($"  Fixed:  {fixedPath}");
+        Console.WriteLine($"\n  Screen convention: +Y = DOWN");
+        Console.WriteLine($"  In BROKEN image: grid at TOP, skeleton hangs below");
+        Console.WriteLine($"  In FIXED image:  grid at BOTTOM (feet), pedestal below");
 
-        Assert.That(File.Exists(brokenPath), Is.True, "Broken image should be saved");
-        Assert.That(File.Exists(fixedPath), Is.True, "Fixed image should be saved");
+        Assert.That(File.Exists(brokenPath), Is.True);
+        Assert.That(File.Exists(fixedPath), Is.True);
     }
 }
