@@ -539,55 +539,63 @@ namespace ailiaSDK
 		{
 			float scale = 1.0f;
 
+			//腰の中点を原点にする（DrawBone3Dと同じ座標系にする）
+			float origin_x = (obj.points[AiliaPoseEstimator.AILIA_POSE_ESTIMATOR_POSE_KEYPOINT_HIP_LEFT].x + obj.points[AiliaPoseEstimator.AILIA_POSE_ESTIMATOR_POSE_KEYPOINT_HIP_RIGHT].x) / 2.0f;
+			float origin_y = (obj.points[AiliaPoseEstimator.AILIA_POSE_ESTIMATOR_POSE_KEYPOINT_HIP_LEFT].y + obj.points[AiliaPoseEstimator.AILIA_POSE_ESTIMATOR_POSE_KEYPOINT_HIP_RIGHT].y) / 2.0f;
+			float origin_z = (obj.points[AiliaPoseEstimator.AILIA_POSE_ESTIMATOR_POSE_KEYPOINT_HIP_LEFT].z_local + obj.points[AiliaPoseEstimator.AILIA_POSE_ESTIMATOR_POSE_KEYPOINT_HIP_RIGHT].z_local) / 2.0f;
+
 			//全てのlandmarkのx,y,z座標のうち，絶対値が最大のものを取得する
-			//また，y座標が最小のものを取得する
+			//また，y座標が最大のものを取得する（画面上でY正が下方向のため、y_maxが足元=地面）
 			float abs_max = 0.0f;
-			float y_min = 1.0f;
+			float y_max = -1.0f;
 			for (int i = 0; i < obj.points.Length; i++)
 			{
-				abs_max = Mathf.Max(abs_max, Math.Abs(obj.points[i].x), Math.Abs(obj.points[i].y), Math.Abs(obj.points[i].z_local));
-				y_min = Mathf.Min(y_min, obj.points[i].y);
+				float cx = obj.points[i].x - origin_x;
+				float cy = obj.points[i].y - origin_y;
+				float cz = obj.points[i].z_local - origin_z;
+				abs_max = Mathf.Max(abs_max, Math.Abs(cx), Math.Abs(cy), Math.Abs(cz));
+				y_max = Mathf.Max(y_max, cy);
 			}
 			scale = abs_max + 0.1f;
 
-			//外側の軸
-			DrawAxisSphere3D(new Color(0.0f, 92.0f / 255, 0.0f, 1.0f), -scale, y_min, -scale);
-			DrawAxisSphere3D(new Color(0.0f, 92.0f / 255, 0.0f, 1.0f), -scale, y_min, scale);
-			DrawAxisSphere3D(new Color(0.0f, 92.0f / 255, 0.0f, 1.0f), -scale, y_min - scale * 2, -scale);
-			DrawAxisSphere3D(new Color(0.0f, 92.0f / 255, 0.0f, 1.0f), -scale, y_min - scale * 2, scale);
-			DrawAxisSphere3D(new Color(0.0f, 92.0f / 255, 0.0f, 1.0f), scale, y_min, -scale);
-			DrawAxisSphere3D(new Color(0.0f, 92.0f / 255, 0.0f, 1.0f), scale, y_min, scale);
-			DrawAxisSphere3D(new Color(0.0f, 92.0f / 255, 0.0f, 1.0f), scale, y_min - scale * 2, -scale);
-			DrawAxisSphere3D(new Color(0.0f, 92.0f / 255, 0.0f, 1.0f), scale, y_min - scale * 2, scale);
-			DrawAxisLine3D(Color.white, -scale, y_min, -scale, scale, y_min, -scale);
-			DrawAxisLine3D(Color.white, -scale, y_min - scale * 2, -scale, scale, y_min - scale * 2, -scale);
-			DrawAxisLine3D(Color.white, -scale, y_min - scale * 2, scale, scale, y_min - scale * 2, scale);
-			DrawAxisLine3D(Color.white, -scale, y_min, scale, scale, y_min, scale);
-			DrawAxisLine3D(Color.white, -scale, y_min, -scale, -scale, y_min - scale * 2, -scale);
-			DrawAxisLine3D(Color.white, scale, y_min, -scale, scale, y_min - scale * 2, -scale);
-			DrawAxisLine3D(Color.white, scale, y_min, scale, scale, y_min - scale * 2, scale);
-			DrawAxisLine3D(Color.white, -scale, y_min, scale, -scale, y_min - scale * 2, scale);
-			DrawAxisLine3D(Color.white, -scale, y_min, -scale, -scale, y_min, scale);
-			DrawAxisLine3D(Color.white, scale, y_min, -scale, scale, y_min, scale);
-			DrawAxisLine3D(Color.white, scale, y_min - scale * 2, -scale, scale, y_min - scale * 2, scale);
-			DrawAxisLine3D(Color.white, -scale, y_min - scale * 2, -scale, -scale, y_min - scale * 2, scale);
+			//外側の軸（グリッドをy_maxに配置、ボックスをy_max - scale*2まで上方向に伸ばす＝人がボックスの中に入る）
+			DrawAxisSphere3D(new Color(0.0f, 92.0f / 255, 0.0f, 1.0f), -scale, y_max, -scale);
+			DrawAxisSphere3D(new Color(0.0f, 92.0f / 255, 0.0f, 1.0f), -scale, y_max, scale);
+			DrawAxisSphere3D(new Color(0.0f, 92.0f / 255, 0.0f, 1.0f), -scale, y_max - scale * 2, -scale);
+			DrawAxisSphere3D(new Color(0.0f, 92.0f / 255, 0.0f, 1.0f), -scale, y_max - scale * 2, scale);
+			DrawAxisSphere3D(new Color(0.0f, 92.0f / 255, 0.0f, 1.0f), scale, y_max, -scale);
+			DrawAxisSphere3D(new Color(0.0f, 92.0f / 255, 0.0f, 1.0f), scale, y_max, scale);
+			DrawAxisSphere3D(new Color(0.0f, 92.0f / 255, 0.0f, 1.0f), scale, y_max - scale * 2, -scale);
+			DrawAxisSphere3D(new Color(0.0f, 92.0f / 255, 0.0f, 1.0f), scale, y_max - scale * 2, scale);
+			DrawAxisLine3D(Color.white, -scale, y_max, -scale, scale, y_max, -scale);
+			DrawAxisLine3D(Color.white, -scale, y_max - scale * 2, -scale, scale, y_max - scale * 2, -scale);
+			DrawAxisLine3D(Color.white, -scale, y_max - scale * 2, scale, scale, y_max - scale * 2, scale);
+			DrawAxisLine3D(Color.white, -scale, y_max, scale, scale, y_max, scale);
+			DrawAxisLine3D(Color.white, -scale, y_max, -scale, -scale, y_max - scale * 2, -scale);
+			DrawAxisLine3D(Color.white, scale, y_max, -scale, scale, y_max - scale * 2, -scale);
+			DrawAxisLine3D(Color.white, scale, y_max, scale, scale, y_max - scale * 2, scale);
+			DrawAxisLine3D(Color.white, -scale, y_max, scale, -scale, y_max - scale * 2, scale);
+			DrawAxisLine3D(Color.white, -scale, y_max, -scale, -scale, y_max, scale);
+			DrawAxisLine3D(Color.white, scale, y_max, -scale, scale, y_max, scale);
+			DrawAxisLine3D(Color.white, scale, y_max - scale * 2, -scale, scale, y_max - scale * 2, scale);
+			DrawAxisLine3D(Color.white, -scale, y_max - scale * 2, -scale, -scale, y_max - scale * 2, scale);
 
 			//内側のグリッド線
-			DrawAxisLine3D(new Color(1.0f, 1.0f, 1.0f, 0.1f), -scale, y_min, -scale * 0.75f, scale, y_min, -scale * 0.75f, 0.5f);
-			DrawAxisLine3D(new Color(1.0f, 1.0f, 1.0f, 0.1f), -scale, y_min, -scale * 0.5f, scale, y_min, -scale * 0.5f, 0.5f);
-			DrawAxisLine3D(new Color(1.0f, 1.0f, 1.0f, 0.1f), -scale, y_min, -scale * 0.25f, scale, y_min, -scale * 0.25f, 0.5f);
-			DrawAxisLine3D(new Color(1.0f, 1.0f, 1.0f, 0.1f), -scale, y_min, 0.0f, scale, y_min, 0.0f, 0.5f);
-			DrawAxisLine3D(new Color(1.0f, 1.0f, 1.0f, 0.1f), -scale, y_min, scale * 0.25f, scale, y_min, scale * 0.25f, 0.5f);
-			DrawAxisLine3D(new Color(1.0f, 1.0f, 1.0f, 0.1f), -scale, y_min, scale * 0.5f, scale, y_min, scale * 0.5f, 0.5f);
-			DrawAxisLine3D(new Color(1.0f, 1.0f, 1.0f, 0.1f), -scale, y_min, scale * 0.75f, scale, y_min, scale * 0.75f, 0.5f);
+			DrawAxisLine3D(new Color(1.0f, 1.0f, 1.0f, 0.1f), -scale, y_max, -scale * 0.75f, scale, y_max, -scale * 0.75f, 0.5f);
+			DrawAxisLine3D(new Color(1.0f, 1.0f, 1.0f, 0.1f), -scale, y_max, -scale * 0.5f, scale, y_max, -scale * 0.5f, 0.5f);
+			DrawAxisLine3D(new Color(1.0f, 1.0f, 1.0f, 0.1f), -scale, y_max, -scale * 0.25f, scale, y_max, -scale * 0.25f, 0.5f);
+			DrawAxisLine3D(new Color(1.0f, 1.0f, 1.0f, 0.1f), -scale, y_max, 0.0f, scale, y_max, 0.0f, 0.5f);
+			DrawAxisLine3D(new Color(1.0f, 1.0f, 1.0f, 0.1f), -scale, y_max, scale * 0.25f, scale, y_max, scale * 0.25f, 0.5f);
+			DrawAxisLine3D(new Color(1.0f, 1.0f, 1.0f, 0.1f), -scale, y_max, scale * 0.5f, scale, y_max, scale * 0.5f, 0.5f);
+			DrawAxisLine3D(new Color(1.0f, 1.0f, 1.0f, 0.1f), -scale, y_max, scale * 0.75f, scale, y_max, scale * 0.75f, 0.5f);
 
-			DrawAxisLine3D(new Color(1.0f, 1.0f, 1.0f, 0.1f), -scale * 0.75f, y_min, -scale, -scale * 0.75f, y_min, scale, 0.5f);
-			DrawAxisLine3D(new Color(1.0f, 1.0f, 1.0f, 0.1f), -scale * 0.5f, y_min, -scale, -scale * 0.5f, y_min, scale, 0.5f);
-			DrawAxisLine3D(new Color(1.0f, 1.0f, 1.0f, 0.1f), -scale * 0.25f, y_min, -scale, -scale * 0.25f, y_min, scale, 0.5f);
-			DrawAxisLine3D(new Color(1.0f, 1.0f, 1.0f, 0.1f), 0.0f, y_min, -scale, 0.0f, y_min, scale, 0.5f);
-			DrawAxisLine3D(new Color(1.0f, 1.0f, 1.0f, 0.1f), scale * 0.25f, y_min, -scale, scale * 0.25f, y_min, scale, 0.5f);
-			DrawAxisLine3D(new Color(1.0f, 1.0f, 1.0f, 0.1f), scale * 0.5f, y_min, -scale, scale * 0.5f, y_min, scale, 0.5f);
-			DrawAxisLine3D(new Color(1.0f, 1.0f, 1.0f, 0.1f), scale * 0.75f, y_min, -scale, scale * 0.75f, y_min, scale, 0.5f);
+			DrawAxisLine3D(new Color(1.0f, 1.0f, 1.0f, 0.1f), -scale * 0.75f, y_max, -scale, -scale * 0.75f, y_max, scale, 0.5f);
+			DrawAxisLine3D(new Color(1.0f, 1.0f, 1.0f, 0.1f), -scale * 0.5f, y_max, -scale, -scale * 0.5f, y_max, scale, 0.5f);
+			DrawAxisLine3D(new Color(1.0f, 1.0f, 1.0f, 0.1f), -scale * 0.25f, y_max, -scale, -scale * 0.25f, y_max, scale, 0.5f);
+			DrawAxisLine3D(new Color(1.0f, 1.0f, 1.0f, 0.1f), 0.0f, y_max, -scale, 0.0f, y_max, scale, 0.5f);
+			DrawAxisLine3D(new Color(1.0f, 1.0f, 1.0f, 0.1f), scale * 0.25f, y_max, -scale, scale * 0.25f, y_max, scale, 0.5f);
+			DrawAxisLine3D(new Color(1.0f, 1.0f, 1.0f, 0.1f), scale * 0.5f, y_max, -scale, scale * 0.5f, y_max, scale, 0.5f);
+			DrawAxisLine3D(new Color(1.0f, 1.0f, 1.0f, 0.1f), scale * 0.75f, y_max, -scale, scale * 0.75f, y_max, scale, 0.5f);
 
 		}
 
