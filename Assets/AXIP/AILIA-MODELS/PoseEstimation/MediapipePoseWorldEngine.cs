@@ -771,7 +771,7 @@ public class MediapipePoseWorldEngine
             allLandmarks[i] = new PoseLandmarkResult
             {
                 X = cosa * x - sina * y,
-                Y = sina * x + cosa * y,
+                Y = -(sina * x + cosa * y),  // Negate Y: MediaPipe Y-down -> Unity Y-up
                 Z = sourceLandmarks[i].Z,
                 Confidence = sourceLandmarks[i].Confidence
             };

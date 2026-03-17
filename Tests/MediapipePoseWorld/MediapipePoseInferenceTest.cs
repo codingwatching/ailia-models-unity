@@ -671,7 +671,7 @@ public class MediapipePoseInferenceTest
         Assert.That(worldResult.Length, Is.EqualTo(19), "Should have 19 keypoints");
 
         // Compare first 17 keypoints with Python's transformed world landmarks
-        // KEYPOINT_MAPPING maps from our 17-keypoint order to MediaPipe 33-landmark indices
+        // C# negates Y for Unity (Y-up), so compare with negated Python Y
         Console.WriteLine("\n=== World Landmarks Transformed (17 body keypoints) ===");
         float maxDiff = 0;
         string[] kpNames = { "Nose", "L_Eye", "R_Eye", "L_Ear", "R_Ear",
@@ -681,7 +681,7 @@ public class MediapipePoseInferenceTest
         {
             int mpIdx = MediapipePoseWorldEngine.KEYPOINT_MAPPING[i];
             float pyX = refWorldTransformed[mpIdx * 3];
-            float pyY = refWorldTransformed[mpIdx * 3 + 1];
+            float pyY = -refWorldTransformed[mpIdx * 3 + 1]; // Negated: Python Y-down -> Unity Y-up
             float pyZ = refWorldTransformed[mpIdx * 3 + 2];
             float csX = worldResult[i].X;
             float csY = worldResult[i].Y;
