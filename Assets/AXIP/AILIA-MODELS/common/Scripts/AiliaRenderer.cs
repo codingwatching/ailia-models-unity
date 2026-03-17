@@ -418,12 +418,12 @@ namespace ailiaSDK
 			float origin_y = (obj.points[AiliaPoseEstimator.AILIA_POSE_ESTIMATOR_POSE_KEYPOINT_HIP_LEFT].y + obj.points[AiliaPoseEstimator.AILIA_POSE_ESTIMATOR_POSE_KEYPOINT_HIP_RIGHT].y) / 2.0f;
 			float origin_z = (obj.points[AiliaPoseEstimator.AILIA_POSE_ESTIMATOR_POSE_KEYPOINT_HIP_LEFT].z_local + obj.points[AiliaPoseEstimator.AILIA_POSE_ESTIMATOR_POSE_KEYPOINT_HIP_RIGHT].z_local) / 2.0f;
 
-			//腰の中点を原点に変える
+			//腰の中点を原点に変える（Y軸は反転：MediaPipeはY-down、UnityはY-up）
 			from_x -= origin_x;
-			from_y -= origin_y;
+			from_y = -(from_y - origin_y);
 			from_z -= origin_z;
 			to_x -= origin_x;
-			to_y -= origin_y;
+			to_y = -(to_y - origin_y);
 			to_z -= origin_z;
 
 			//3次元landmarkを回転させる
@@ -546,12 +546,13 @@ namespace ailiaSDK
 
 			//全てのlandmarkのx,y,z座標のうち，絶対値が最大のものを取得する
 			//また，y座標が最小のものを取得する
+			//Y軸は反転：MediaPipeはY-down、UnityはY-up
 			float abs_max = 0.0f;
 			float y_min = 1.0f;
 			for (int i = 0; i < obj.points.Length; i++)
 			{
 				float cx = obj.points[i].x - origin_x;
-				float cy = obj.points[i].y - origin_y;
+				float cy = -(obj.points[i].y - origin_y);
 				float cz = obj.points[i].z_local - origin_z;
 				abs_max = Mathf.Max(abs_max, Math.Abs(cx), Math.Abs(cy), Math.Abs(cz));
 				y_min = Mathf.Min(y_min, cy);
