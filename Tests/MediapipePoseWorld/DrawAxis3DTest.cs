@@ -340,7 +340,7 @@ public class DrawAxis3DTest
         if (gridMode == "y_max")
         {
             gridY = y_max;
-            boxEndY = y_max + scale * 2;  // Extend further down (larger Y = lower on screen)
+            boxEndY = y_max - scale * 2;  // Extend upward (smaller Y = higher on screen) so skeleton is inside box
         }
         else // "y_min" - original broken code
         {
@@ -630,7 +630,7 @@ public class DrawAxis3DTest
         Console.WriteLine($"\n  y_max = {y_max:F4} (ankle level = bottom of screen = ground)");
         Console.WriteLine($"  scale = {scale:F4}");
         Console.WriteLine($"  Grid Y = {y_max:F4} => at ankle level (ground plane)");
-        Console.WriteLine($"  Box extends to {y_max + scale * 2:F4} => below ground (pedestal)");
+        Console.WriteLine($"  Box extends to {y_max - scale * 2:F4} => above ground (enclosing skeleton)");
 
         // Verify screen ordering (top to bottom)
         Assert.That(nose_cy, Is.LessThan(avg_shoulder + 0.05f), "Nose above shoulders on screen");
@@ -641,11 +641,11 @@ public class DrawAxis3DTest
         Assert.That(y_max, Is.GreaterThanOrEqualTo(avg_ankle - 0.01f),
             "Grid (y_max) should be at or below ankle level (bottom of screen)");
 
-        // Box extends further down
-        Assert.That(y_max + scale * 2, Is.GreaterThan(y_max),
-            "Box should extend below the grid (further down on screen)");
+        // Box extends upward (smaller Y = higher on screen), enclosing the skeleton
+        Assert.That(y_max - scale * 2, Is.LessThan(nose_cy),
+            "Box top should be above the nose (skeleton is inside the box)");
 
-        Console.WriteLine("\n  => CORRECT: Grid at bottom (feet), pedestal extends below");
+        Console.WriteLine("\n  => CORRECT: Grid at bottom (feet), box extends upward enclosing skeleton");
     }
 
     [Test]
