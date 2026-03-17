@@ -551,27 +551,26 @@ namespace ailiaSDK
 			scale = abs_max + 0.1f;
 
 			//外側の軸
-			float y_top = y_min + scale * 2;
 			DrawAxisSphere3D(new Color(0.0f, 92.0f / 255, 0.0f, 1.0f), -scale, y_min, -scale);
 			DrawAxisSphere3D(new Color(0.0f, 92.0f / 255, 0.0f, 1.0f), -scale, y_min, scale);
-			DrawAxisSphere3D(new Color(0.0f, 92.0f / 255, 0.0f, 1.0f), -scale, y_top, -scale);
-			DrawAxisSphere3D(new Color(0.0f, 92.0f / 255, 0.0f, 1.0f), -scale, y_top, scale);
+			DrawAxisSphere3D(new Color(0.0f, 92.0f / 255, 0.0f, 1.0f), -scale, y_min - scale * 2, -scale);
+			DrawAxisSphere3D(new Color(0.0f, 92.0f / 255, 0.0f, 1.0f), -scale, y_min - scale * 2, scale);
 			DrawAxisSphere3D(new Color(0.0f, 92.0f / 255, 0.0f, 1.0f), scale, y_min, -scale);
 			DrawAxisSphere3D(new Color(0.0f, 92.0f / 255, 0.0f, 1.0f), scale, y_min, scale);
-			DrawAxisSphere3D(new Color(0.0f, 92.0f / 255, 0.0f, 1.0f), scale, y_top, -scale);
-			DrawAxisSphere3D(new Color(0.0f, 92.0f / 255, 0.0f, 1.0f), scale, y_top, scale);
+			DrawAxisSphere3D(new Color(0.0f, 92.0f / 255, 0.0f, 1.0f), scale, y_min - scale * 2, -scale);
+			DrawAxisSphere3D(new Color(0.0f, 92.0f / 255, 0.0f, 1.0f), scale, y_min - scale * 2, scale);
 			DrawAxisLine3D(Color.white, -scale, y_min, -scale, scale, y_min, -scale);
-			DrawAxisLine3D(Color.white, -scale, y_top, -scale, scale, y_top, -scale);
-			DrawAxisLine3D(Color.white, -scale, y_top, scale, scale, y_top, scale);
+			DrawAxisLine3D(Color.white, -scale, y_min - scale * 2, -scale, scale, y_min - scale * 2, -scale);
+			DrawAxisLine3D(Color.white, -scale, y_min - scale * 2, scale, scale, y_min - scale * 2, scale);
 			DrawAxisLine3D(Color.white, -scale, y_min, scale, scale, y_min, scale);
-			DrawAxisLine3D(Color.white, -scale, y_min, -scale, -scale, y_top, -scale);
-			DrawAxisLine3D(Color.white, scale, y_min, -scale, scale, y_top, -scale);
-			DrawAxisLine3D(Color.white, scale, y_min, scale, scale, y_top, scale);
-			DrawAxisLine3D(Color.white, -scale, y_min, scale, -scale, y_top, scale);
+			DrawAxisLine3D(Color.white, -scale, y_min, -scale, -scale, y_min - scale * 2, -scale);
+			DrawAxisLine3D(Color.white, scale, y_min, -scale, scale, y_min - scale * 2, -scale);
+			DrawAxisLine3D(Color.white, scale, y_min, scale, scale, y_min - scale * 2, scale);
+			DrawAxisLine3D(Color.white, -scale, y_min, scale, -scale, y_min - scale * 2, scale);
 			DrawAxisLine3D(Color.white, -scale, y_min, -scale, -scale, y_min, scale);
 			DrawAxisLine3D(Color.white, scale, y_min, -scale, scale, y_min, scale);
-			DrawAxisLine3D(Color.white, scale, y_top, -scale, scale, y_top, scale);
-			DrawAxisLine3D(Color.white, -scale, y_top, -scale, -scale, y_top, scale);
+			DrawAxisLine3D(Color.white, scale, y_min - scale * 2, -scale, scale, y_min - scale * 2, scale);
+			DrawAxisLine3D(Color.white, -scale, y_min - scale * 2, -scale, -scale, y_min - scale * 2, scale);
 
 			//内側のグリッド線
 			DrawAxisLine3D(new Color(1.0f, 1.0f, 1.0f, 0.1f), -scale, y_min, -scale * 0.75f, scale, y_min, -scale * 0.75f, 0.5f);

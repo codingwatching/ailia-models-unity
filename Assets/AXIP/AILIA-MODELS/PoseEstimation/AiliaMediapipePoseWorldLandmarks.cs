@@ -183,8 +183,7 @@ public class AiliaMediapipePoseWorldLandmarks : IDisposable
         {
             AiliaPoseEstimator.AILIAPoseEstimatorKeypoint keypoint = new AiliaPoseEstimator.AILIAPoseEstimatorKeypoint();
             keypoint.x = results[i].X;
-            // World landmarks: negate Y to convert from model's Y-down (due to B2T ROI fed as T2B) to Unity Y-up
-            keypoint.y = world_cordinate ? -results[i].Y : results[i].Y;
+            keypoint.y = results[i].Y;
             keypoint.z_local = results[i].Z;
             keypoint.score = results[i].Confidence;
             one_pose.points[i] = keypoint;
