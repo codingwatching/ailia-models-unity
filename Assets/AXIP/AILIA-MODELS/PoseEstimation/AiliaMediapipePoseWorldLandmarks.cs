@@ -35,6 +35,9 @@ public class AiliaMediapipePoseWorldLandmarks : IDisposable
     private int imageWidth;
     private int imageHeight;
 
+    // GPU ROI rotation angle (B2T coordinate system, differs from engine's T2B rotation)
+    private float gpuRoiRotation;
+
     public AiliaMediapipePoseWorldLandmarks(bool gpuMode, string assetPath, string jsonPath)
     {
         backend = new AiliaMediapipePoseBackend(gpuMode);
@@ -131,7 +134,7 @@ public class AiliaMediapipePoseWorldLandmarks : IDisposable
         PoseLandmarkResult[] results;
         if (world_cordinate)
         {
-            results = engine.GetWorldResult();
+            results = engine.GetWorldResult(gpuRoiRotation);
         }
         else
         {
@@ -227,6 +230,7 @@ public class AiliaMediapipePoseWorldLandmarks : IDisposable
         float theta0 = Mathf.PI / 2f;
         float scale = dscale * Mathf.Sqrt(Mathf.Pow(xc - x1, 2) + Mathf.Pow(yc - y1, 2)) * 2;
         float angle = Mathf.Atan2(yc - y1, xc - x1) - theta0;
+        gpuRoiRotation = angle;
 
         // Set engine ROI parameters (for GetImageResult coordinate transform)
         // Use T2B keypoint coordinates for engine
@@ -239,10 +243,6 @@ public class AiliaMediapipePoseWorldLandmarks : IDisposable
         // (we use GPU for the actual extraction but need the engine's ROI state)
         var dummyPixels = new Color32[1];
         engine.ExtractROI(dummyPixels, tex_width, tex_height, box);
-
-        // Override RoiRotation with the GPU-computed angle (B2T coordinate system)
-        // ExtractROI computes rotation in T2B space, but the GPU cuts ROI in B2T space
-        engine.RoiRotation = angle;
 
         // Compute affine transform matrix for GPU shader
         Vector2[] points = new Vector2[]

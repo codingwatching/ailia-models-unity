@@ -173,7 +173,7 @@ public class MediapipePoseWorldEngine
     public float RoiCenterX { get; private set; }
     public float RoiCenterY { get; private set; }
     public float RoiBoxSize { get; private set; }
-    public float RoiRotation { get; set; }
+    public float RoiRotation { get; private set; }
 
     // Decoded landmarks (set after DecodeLandmarks)
     public PoseLandmarkResult[] Landmarks { get; private set; }
@@ -753,14 +753,15 @@ public class MediapipePoseWorldEngine
     // Get world coordinate results (17 body parts + shoulder center + body center)
     // Used by Unity for AiliaPoseEstimator compatibility
     // -------------------------------------------------------
-    public PoseLandmarkResult[] GetWorldResult()
+    public PoseLandmarkResult[] GetWorldResult(float? rotationOverride = null)
     {
         // Use world landmarks if available, otherwise fall back to image landmarks
         var sourceLandmarks = WorldLandmarks ?? Landmarks;
         if (sourceLandmarks == null) return null;
 
-        float cosa = Mathf.Cos(RoiRotation);
-        float sina = Mathf.Sin(RoiRotation);
+        float rotation = rotationOverride ?? RoiRotation;
+        float cosa = Mathf.Cos(rotation);
+        float sina = Mathf.Sin(rotation);
 
         // Apply rotation transform to world landmarks (matches Python)
         var allLandmarks = new PoseLandmarkResult[ESTIMATOR_LANDMARK_COUNT];
