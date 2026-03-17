@@ -88,9 +88,8 @@ namespace ailiaSDK
 					break;
 				case PoseEstimatorModels.blazepose_fullbody:
 					var folder_path = "blazepose-fullbody";
-					var model_name = "pose_landmark_heavy";
-					urlList.Add(new ModelDownloadURL() { folder_path = folder_path, file_name = model_name + ".onnx" });
-					urlList.Add(new ModelDownloadURL() { folder_path = folder_path, file_name = model_name + ".onnx.prototxt" });
+					urlList.Add(new ModelDownloadURL() { folder_path = folder_path, file_name = "pose_landmark_heavy.onnx" });
+					urlList.Add(new ModelDownloadURL() { folder_path = folder_path, file_name = "pose_landmark_heavy.onnx.prototxt" });
 					urlList.Add(new ModelDownloadURL() { folder_path = folder_path, file_name = "pose_detection.onnx" });
 					urlList.Add(new ModelDownloadURL() { folder_path = folder_path, file_name = "pose_detection.onnx.prototxt" });
 
@@ -105,10 +104,8 @@ namespace ailiaSDK
 					break;
 				case PoseEstimatorModels.mediapipe_pose_world_landmarks:
 					var _folder_path = "mediapipe_pose_world_landmarks";
-					//var _folder_path = "blazepose-fullbody";
-					var _model_name = "pose_landmark_heavy";
-					urlList.Add(new ModelDownloadURL() { folder_path = _folder_path, file_name = _model_name + ".onnx"});
-					urlList.Add(new ModelDownloadURL() { folder_path = _folder_path, file_name = _model_name + ".onnx.prototxt" });
+					urlList.Add(new ModelDownloadURL() { folder_path = _folder_path, file_name = "pose_landmark_heavy.onnx", local_name = "pose_landmark_heavy_world_landmarks.onnx" });
+					urlList.Add(new ModelDownloadURL() { folder_path = _folder_path, file_name = "pose_landmark_heavy.onnx.prototxt", local_name = "pose_landmark_heavy_world_landmarks.onnx.prototxt" });
 					urlList.Add(new ModelDownloadURL() { folder_path = _folder_path, file_name = "pose_detection.onnx", local_name = "pose_detection_world_landmarks.onnx" });
 					urlList.Add(new ModelDownloadURL() { folder_path = _folder_path, file_name = "pose_detection.onnx.prototxt", local_name = "pose_detection_world_landmarks.onnx.prototxt" });
 
