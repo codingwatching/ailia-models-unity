@@ -539,14 +539,22 @@ namespace ailiaSDK
 		{
 			float scale = 1.0f;
 
+			//腰の中点を原点にする（DrawBone3Dと同じ座標系にする）
+			float origin_x = (obj.points[AiliaPoseEstimator.AILIA_POSE_ESTIMATOR_POSE_KEYPOINT_HIP_LEFT].x + obj.points[AiliaPoseEstimator.AILIA_POSE_ESTIMATOR_POSE_KEYPOINT_HIP_RIGHT].x) / 2.0f;
+			float origin_y = (obj.points[AiliaPoseEstimator.AILIA_POSE_ESTIMATOR_POSE_KEYPOINT_HIP_LEFT].y + obj.points[AiliaPoseEstimator.AILIA_POSE_ESTIMATOR_POSE_KEYPOINT_HIP_RIGHT].y) / 2.0f;
+			float origin_z = (obj.points[AiliaPoseEstimator.AILIA_POSE_ESTIMATOR_POSE_KEYPOINT_HIP_LEFT].z_local + obj.points[AiliaPoseEstimator.AILIA_POSE_ESTIMATOR_POSE_KEYPOINT_HIP_RIGHT].z_local) / 2.0f;
+
 			//全てのlandmarkのx,y,z座標のうち，絶対値が最大のものを取得する
 			//また，y座標が最小のものを取得する
 			float abs_max = 0.0f;
 			float y_min = 1.0f;
 			for (int i = 0; i < obj.points.Length; i++)
 			{
-				abs_max = Mathf.Max(abs_max, Math.Abs(obj.points[i].x), Math.Abs(obj.points[i].y), Math.Abs(obj.points[i].z_local));
-				y_min = Mathf.Min(y_min, obj.points[i].y);
+				float cx = obj.points[i].x - origin_x;
+				float cy = obj.points[i].y - origin_y;
+				float cz = obj.points[i].z_local - origin_z;
+				abs_max = Mathf.Max(abs_max, Math.Abs(cx), Math.Abs(cy), Math.Abs(cz));
+				y_min = Mathf.Min(y_min, cy);
 			}
 			scale = abs_max + 0.1f;
 
