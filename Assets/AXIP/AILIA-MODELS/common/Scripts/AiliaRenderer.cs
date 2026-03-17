@@ -13,7 +13,7 @@ namespace ailiaSDK
 	{
 		public GameObject line_panel;   //LinePanel
 		public GameObject lines;        //LinePanel/Lines
-		public GameObject line;         // Line to instiate
+		public GameObject line;         //Line to instiate
 		public GameObject text_panel;   //TextPanel
 		public GameObject text_base;    //TextPanel/Text
 		List<GameObject> textObjectBuffer = new List<GameObject>();
@@ -36,7 +36,7 @@ namespace ailiaSDK
 			textObjectBufferIndex = 0;
 		}
 
-		public void DrawBone(Color32 color, int tex_width, int tex_height, AiliaPoseEstimator.AILIAPoseEstimatorObjectPose obj, uint from, uint to, int r)
+		public void DrawBone(Color32 color, int tex_width, int tex_height, AiliaPoseEstimator.AILIAPoseEstimatorObjectPose obj, uint from, uint to, int r, bool is_z_local = true)
 		{
 			float th = 0.1f;
 			if (obj.points[from].score <= th || obj.points[to].score <= th)
@@ -52,7 +52,13 @@ namespace ailiaSDK
 			int len = (to_x - from_x) * (to_x - from_x) + (to_y - from_y) * (to_y - from_y);
 			len = (int)Mathf.Sqrt(len);
 
-			DrawLine(color, from_x, from_y, obj.points[from].z_local, to_x, to_y, obj.points[to].z_local, tex_width, tex_height);
+			if (is_z_local) {
+				DrawLine(color, from_x, from_y, obj.points[from].z_local, to_x, to_y, obj.points[to].z_local, tex_width, tex_height);
+			}
+			else
+            {
+				DrawLine(color, from_x, from_y, 0, to_x, to_y, 0, tex_width, tex_height);
+			}
 		}
 
 		public void DrawLine(Color32 color, int from_x, int from_y, float from_z, int to_x, int to_y, float to_z, int tex_width, int tex_height, float thickness = 1.0f)
@@ -118,8 +124,8 @@ namespace ailiaSDK
 			//to_z = 0;
 
 			lRend.positionCount = 2;
-			lRend.startWidth = System.Math.Max((-from_z * 10 + 1),1) * base_width;
-			lRend.endWidth = System.Math.Max((-to_z * 10 + 1),1) * base_width;
+			lRend.startWidth = System.Math.Max((-from_z * 10 + 1), 1) * base_width;
+			lRend.endWidth = System.Math.Max((-to_z * 10 + 1), 1) * base_width;
 
 			Vector3 startVec = pointPos1;
 			Vector3 endVec = pointPos2;
@@ -300,10 +306,10 @@ namespace ailiaSDK
 			float cs = (float)System.Math.Cos(-theta);
 			float ss = (float)System.Math.Sin(-theta);
 
-			AppendEdgeOfRect2D(color, (int)(x + w/2 + w/2 * cs + h/2 * ss), (int)(y + h/2 + w/2 * -ss + h/2 * cs), tex_width, tex_height, lRend);
-			AppendEdgeOfRect2D(color, (int)(x + w/2 - w/2 * cs + h/2 * ss), (int)(y + h/2 - w/2 * -ss + h/2 * cs), tex_width, tex_height, lRend);
-			AppendEdgeOfRect2D(color, (int)(x + w/2 - w/2 * cs - h/2 * ss), (int)(y + h/2 - w/2 * -ss - h/2 * cs), tex_width, tex_height, lRend);
-			AppendEdgeOfRect2D(color, (int)(x + w/2 + w/2 * cs - h/2 * ss), (int)(y + h/2 + w/2 * -ss - h/2 * cs), tex_width, tex_height, lRend);
+			AppendEdgeOfRect2D(color, (int)(x + w / 2 + w / 2 * cs + h / 2 * ss), (int)(y + h / 2 + w / 2 * -ss + h / 2 * cs), tex_width, tex_height, lRend);
+			AppendEdgeOfRect2D(color, (int)(x + w / 2 - w / 2 * cs + h / 2 * ss), (int)(y + h / 2 - w / 2 * -ss + h / 2 * cs), tex_width, tex_height, lRend);
+			AppendEdgeOfRect2D(color, (int)(x + w / 2 - w / 2 * cs - h / 2 * ss), (int)(y + h / 2 - w / 2 * -ss - h / 2 * cs), tex_width, tex_height, lRend);
+			AppendEdgeOfRect2D(color, (int)(x + w / 2 + w / 2 * cs - h / 2 * ss), (int)(y + h / 2 + w / 2 * -ss - h / 2 * cs), tex_width, tex_height, lRend);
 
 			newLine.SetActive(true);
 		}
@@ -338,5 +344,6 @@ namespace ailiaSDK
 			text_object.GetComponent<RectTransform>().anchoredPosition = new Vector2(x * width / tex_width, -y * height / tex_height);
 			text_object.GetComponent<RectTransform>().localScale = new Vector3(scale, scale, 1);
 		}
+
 	}
-} 
+}

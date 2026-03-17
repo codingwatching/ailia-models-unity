@@ -19,6 +19,11 @@ This folder provides multiple 2D human pose estimation samples. The scene is `Po
   - Sources: `./AiliaPoseResnet.cs`, `./AiliaPoseEstimatorsSample.cs`
   - Script behavior: Uses a detection model to get person boxes, then runs a PoseResNet on each crop and stitches the results back to the image.
 
+- MediaPipe Pose World Landmarks
+  - Purpose: Google MediaPipe two‑stage pose estimation with world‑coordinate 3D landmarks (33 keypoints).
+  - Sources: `./AiliaMediapipePoseWorldLandmarks.cs`, `./MediapipePoseWorldEngine.cs`, `./AiliaPoseEstimatorsSample.cs`
+  - Script behavior: Loads pose detection and landmark heavy ONNX models. Detects pose bounding box, extracts ROI via GPU ComputeShader, estimates 33 3D landmarks in both image and world coordinates. Engine logic is separated into `MediapipePoseWorldEngine` for testability.
+
 - E2Pose (End‑to‑End)
   - Purpose: One‑shot end‑to‑end pose estimation (no separate detector required).
   - Sources: `./AiliaE2Pose.cs`, `./AiliaPoseEstimatorsSample.cs`
@@ -33,6 +38,7 @@ This folder provides multiple 2D human pose estimation samples. The scene is `Po
 - Choose a pipeline:
   - Top‑down (detector + pose): use `AiliaPoseResnet` pattern.
   - Two‑stage (detection + landmark): use `AiliaBlazepose`.
+  - Two‑stage with world coordinates: use `MediapipePoseWorldEngine` + `IMediapipePoseBackend`.
   - Single‑stage: use `AiliaE2Pose`.
 - Steps:
   - Open required model files with `AiliaModel.OpenFile(proto, onnx)` (for multi‑stage, open both models).
@@ -44,5 +50,6 @@ This folder provides multiple 2D human pose estimation samples. The scene is `Po
 - Sample controller: `./AiliaPoseEstimatorsSample.cs`
 - BlazePose: `./AiliaBlazepose.cs`
 - PoseResNet: `./AiliaPoseResnet.cs`
+- MediaPipe Pose World: `./AiliaMediapipePoseWorldLandmarks.cs`, `./MediapipePoseWorldEngine.cs`
 - E2Pose: `./AiliaE2Pose.cs`
 
