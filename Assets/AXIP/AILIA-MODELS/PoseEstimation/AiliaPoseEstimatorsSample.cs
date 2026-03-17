@@ -106,8 +106,8 @@ namespace ailiaSDK
 					var _model_name = "pose_landmark_heavy";
 					urlList.Add(new ModelDownloadURL() { folder_path = _folder_path, file_name = _model_name + ".onnx"});
 					urlList.Add(new ModelDownloadURL() { folder_path = _folder_path, file_name = _model_name + ".onnx.prototxt" });
-					urlList.Add(new ModelDownloadURL() { folder_path = _folder_path, file_name = "pose_detection.onnx" });
-					urlList.Add(new ModelDownloadURL() { folder_path = _folder_path, file_name = "pose_detection.onnx.prototxt" });
+					urlList.Add(new ModelDownloadURL() { folder_path = _folder_path, file_name = "pose_detection.onnx", local_name = "pose_detection_world_landmarks.onnx" });
+					urlList.Add(new ModelDownloadURL() { folder_path = _folder_path, file_name = "pose_detection.onnx.prototxt", local_name = "pose_detection_world_landmarks.onnx.prototxt" });
 
 					StartCoroutine(ailia_download.DownloadWithProgressFromURL(urlList, () =>
 					{
