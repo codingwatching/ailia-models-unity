@@ -141,6 +141,9 @@ public class MediapipePoseWorldEngine
     public const int ESTIMATOR_LANDMARK_COUNT = 33;
     public const int ESTIMATOR_VALUES_PER_LANDMARK = 5;
     public const int ESTIMATOR_TENSOR_SIZE = 195; // 33 * 5
+    public const int WORLD_LANDMARK_TOTAL_COUNT = 39;
+    public const int WORLD_LANDMARK_VALUES_PER_LANDMARK = 3;
+    public const int WORLD_LANDMARK_TENSOR_SIZE = 117; // 39 * 3
 
     // ROI scale factor (matches Python's 1.25)
     public const float ROI_SCALE_FACTOR = 1.25f;
@@ -702,15 +705,17 @@ public class MediapipePoseWorldEngine
     // -------------------------------------------------------
     public PoseLandmarkResult[] DecodeWorldLandmarks(float[] rawOutput)
     {
+        // World landmarks have 3 values per landmark (x, y, z), no visibility/presence
+        // Use visibility from image landmarks if available
         var landmarks = new PoseLandmarkResult[ESTIMATOR_LANDMARK_COUNT];
         for (int i = 0; i < ESTIMATOR_LANDMARK_COUNT; ++i)
         {
             landmarks[i] = new PoseLandmarkResult
             {
-                X = rawOutput[i * 5],
-                Y = rawOutput[i * 5 + 1],
-                Z = rawOutput[i * 5 + 2],
-                Confidence = Sigmoid(Math.Min(rawOutput[i * 5 + 3], rawOutput[i * 5 + 4]))
+                X = rawOutput[i * WORLD_LANDMARK_VALUES_PER_LANDMARK],
+                Y = rawOutput[i * WORLD_LANDMARK_VALUES_PER_LANDMARK + 1],
+                Z = rawOutput[i * WORLD_LANDMARK_VALUES_PER_LANDMARK + 2],
+                Confidence = (Landmarks != null) ? Landmarks[i].Confidence : 1.0f
             };
         }
         WorldLandmarks = landmarks;
@@ -983,7 +988,7 @@ public class AiliaMediapipePoseBackend : IMediapipePoseBackend
         estimator.GetBlobData(landmarks, landmarkBlobIndex);
 
         int worldLandmarkBlobIndex = estimator.FindBlobIndexByName("Identity_4");
-        float[] worldLandmarks = new float[MediapipePoseWorldEngine.ESTIMATOR_TENSOR_SIZE];
+        float[] worldLandmarks = new float[MediapipePoseWorldEngine.WORLD_LANDMARK_TENSOR_SIZE];
         estimator.GetBlobData(worldLandmarks, worldLandmarkBlobIndex);
 
         return new EstimatorOutput { Landmarks = landmarks, WorldLandmarks = worldLandmarks, Score = scoreBuffer[0] };

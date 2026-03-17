@@ -592,4 +592,108 @@ public class MediapipePoseInferenceTest
         Assert.That(avgDiff, Is.LessThan(0.02f),
             $"Avg pixel diff {avgDiff:F6} exceeds tolerance");
     }
+
+    // -------------------------------------------------------
+    // Test: World landmark decoding from Python's raw output
+    // Verifies DecodeWorldLandmarks + GetWorldResult match Python
+    // -------------------------------------------------------
+    [Test]
+    public void TestWorldLandmarkDecoding_MatchesPython()
+    {
+        CheckReferenceExists();
+
+        float[] rawWorldLandmarks = LoadNpy(Path.Combine(REFERENCE_DIR, "est_world_landmarks.npy"));
+        float[] refWorldTransformed = LoadNpy(Path.Combine(REFERENCE_DIR, "world_landmarks_transformed.npy"));
+        float[] roiParams = LoadNpy(Path.Combine(REFERENCE_DIR, "roi_params.npy"));
+
+        if (rawWorldLandmarks.Length == 0 || refWorldTransformed.Length == 0)
+        {
+            Assert.Ignore("No world landmark reference data");
+            return;
+        }
+
+        Assert.That(rawWorldLandmarks.Length, Is.EqualTo(MediapipePoseWorldEngine.WORLD_LANDMARK_TENSOR_SIZE),
+            $"World landmark tensor should be {MediapipePoseWorldEngine.WORLD_LANDMARK_TENSOR_SIZE} but got {rawWorldLandmarks.Length}");
+
+        // Set ROI parameters from Python reference (needed for rotation transform)
+        // roiParams: [x_center, y_center, box_size, rotation, ...]
+        // We need to call ExtractROI or set them manually. Use a dummy image to set ROI state.
+        float[] rawLandmarks = LoadNpy(Path.Combine(REFERENCE_DIR, "est_raw_landmarks.npy"));
+        engine.DecodeLandmarks(rawLandmarks);
+
+        // Set ROI rotation by calling ExtractROI with the reference detection box
+        float[] detBox = LoadNpy(Path.Combine(REFERENCE_DIR, "detected_box.npy"));
+        float[] imageShape = LoadNpy(Path.Combine(REFERENCE_DIR, "image_shape.npy"));
+        int imgH = (int)imageShape[0];
+        int imgW = (int)imageShape[1];
+
+        // Reconstruct detection box
+        var box = new MediapipePoseWorldEngine.DecodedBox
+        {
+            yMin = detBox[0], xMin = detBox[1], yMax = detBox[2], xMax = detBox[3],
+            score = 1.0f,
+            keypoints = new float[][] {
+                new float[] { detBox[4], detBox[5] },
+                new float[] { detBox[6], detBox[7] },
+                new float[] { detBox[8], detBox[9] },
+                new float[] { detBox[10], detBox[11] }
+            }
+        };
+
+        // Call ExtractROI with dummy pixels to set ROI parameters
+        var dummyPixels = new Color32[1];
+        engine.ExtractROI(dummyPixels, imgW, imgH, box);
+
+        // Verify ROI rotation matches Python
+        float pyRotation = roiParams[3];
+        Console.WriteLine($"ROI rotation: C#={engine.RoiRotation:F6} Python={pyRotation:F6}");
+        Assert.That(engine.RoiRotation, Is.EqualTo(pyRotation).Within(1e-4f), "ROI rotation should match Python");
+
+        // Decode world landmarks
+        engine.DecodeWorldLandmarks(rawWorldLandmarks);
+
+        // Verify raw world landmarks (before rotation)
+        Console.WriteLine("\n=== Raw World Landmarks (first 5) ===");
+        for (int i = 0; i < 5; i++)
+        {
+            float pyX = rawWorldLandmarks[i * 3];
+            float pyY = rawWorldLandmarks[i * 3 + 1];
+            float pyZ = rawWorldLandmarks[i * 3 + 2];
+            Console.WriteLine($"  wl{i}: decoded=({engine.WorldLandmarks[i].X:F6},{engine.WorldLandmarks[i].Y:F6},{engine.WorldLandmarks[i].Z:F6}) raw=({pyX:F6},{pyY:F6},{pyZ:F6})");
+            Assert.That(engine.WorldLandmarks[i].X, Is.EqualTo(pyX).Within(1e-6f), $"World landmark {i} X");
+            Assert.That(engine.WorldLandmarks[i].Y, Is.EqualTo(pyY).Within(1e-6f), $"World landmark {i} Y");
+            Assert.That(engine.WorldLandmarks[i].Z, Is.EqualTo(pyZ).Within(1e-6f), $"World landmark {i} Z");
+        }
+
+        // Get world result (applies rotation transform + maps to 19 keypoints)
+        var worldResult = engine.GetWorldResult();
+        Assert.That(worldResult, Is.Not.Null, "GetWorldResult should not return null");
+        Assert.That(worldResult.Length, Is.EqualTo(19), "Should have 19 keypoints");
+
+        // Compare first 17 keypoints with Python's transformed world landmarks
+        // KEYPOINT_MAPPING maps from our 17-keypoint order to MediaPipe 33-landmark indices
+        Console.WriteLine("\n=== World Landmarks Transformed (17 body keypoints) ===");
+        float maxDiff = 0;
+        string[] kpNames = { "Nose", "L_Eye", "R_Eye", "L_Ear", "R_Ear",
+            "L_Shoulder", "R_Shoulder", "L_Elbow", "R_Elbow", "L_Wrist", "R_Wrist",
+            "L_Hip", "R_Hip", "L_Knee", "R_Knee", "L_Ankle", "R_Ankle" };
+        for (int i = 0; i < 17; i++)
+        {
+            int mpIdx = MediapipePoseWorldEngine.KEYPOINT_MAPPING[i];
+            float pyX = refWorldTransformed[mpIdx * 3];
+            float pyY = refWorldTransformed[mpIdx * 3 + 1];
+            float pyZ = refWorldTransformed[mpIdx * 3 + 2];
+            float csX = worldResult[i].X;
+            float csY = worldResult[i].Y;
+            float csZ = worldResult[i].Z;
+            float diff = Math.Max(Math.Abs(csX - pyX), Math.Max(Math.Abs(csY - pyY), Math.Abs(csZ - pyZ)));
+            maxDiff = Math.Max(maxDiff, diff);
+
+            Console.WriteLine($"  {kpNames[i]}: C#=({csX:F6},{csY:F6},{csZ:F6}) Python=({pyX:F6},{pyY:F6},{pyZ:F6}) diff={diff:F6}");
+        }
+
+        Console.WriteLine($"\nMax world landmark diff: {maxDiff:F6}");
+        Assert.That(maxDiff, Is.LessThan(1e-4f),
+            $"World landmark max diff {maxDiff:F6} exceeds tolerance");
+    }
 }
