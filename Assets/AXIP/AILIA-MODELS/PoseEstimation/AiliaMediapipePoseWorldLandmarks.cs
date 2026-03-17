@@ -124,6 +124,8 @@ public class AiliaMediapipePoseWorldLandmarks : IDisposable
             return new List<AiliaPoseEstimator.AILIAPoseEstimatorObjectPose>();
         }
 
+        // GetWorldResult returns 19 keypoints; GetImageResult returns 33.
+        // For Unity compatibility, always use the 19-keypoint format.
         PoseLandmarkResult[] results;
         if (world_cordinate)
         {
@@ -131,7 +133,37 @@ public class AiliaMediapipePoseWorldLandmarks : IDisposable
         }
         else
         {
-            results = engine.GetImageResult(imageWidth, imageHeight);
+            // GetImageResult returns 33 landmarks; map to 19-keypoint format
+            var allLandmarks = engine.GetImageResult(imageWidth, imageHeight);
+            if (allLandmarks == null)
+            {
+                return new List<AiliaPoseEstimator.AILIAPoseEstimatorObjectPose>();
+            }
+
+            results = new PoseLandmarkResult[19];
+            for (int i = 0; i < 17; i++)
+            {
+                results[i] = allLandmarks[MediapipePoseWorldEngine.KEYPOINT_MAPPING[i]];
+            }
+            // Shoulder center (index 17)
+            var ls = allLandmarks[11];
+            var rs = allLandmarks[12];
+            results[17] = new PoseLandmarkResult
+            {
+                X = (ls.X + rs.X) / 2, Y = (ls.Y + rs.Y) / 2, Z = (ls.Z + rs.Z) / 2,
+                Confidence = System.Math.Min(ls.Confidence, rs.Confidence)
+            };
+            // Body center (index 18)
+            var lh = allLandmarks[23];
+            var rh = allLandmarks[24];
+            results[18] = new PoseLandmarkResult
+            {
+                X = (ls.X + rs.X + lh.X + rh.X) / 4,
+                Y = (ls.Y + rs.Y + lh.Y + rh.Y) / 4,
+                Z = (ls.Z + rs.Z + lh.Z + rh.Z) / 4,
+                Confidence = System.Math.Min(System.Math.Min(ls.Confidence, rs.Confidence),
+                                              System.Math.Min(lh.Confidence, rh.Confidence))
+            };
         }
 
         if (results == null)
