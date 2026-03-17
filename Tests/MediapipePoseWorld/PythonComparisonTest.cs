@@ -206,7 +206,7 @@ public class PythonComparisonTest
 
         // Shoulder center is index 17
         Assert.That(results[17].X, Is.EqualTo(0.5000000000f).Within(Tol), "SC x");
-        Assert.That(results[17].Y, Is.EqualTo(-0.4648437500f).Within(Tol), "SC y"); // Y negated for Unity
+        Assert.That(results[17].Y, Is.EqualTo(0.4648437500f).Within(Tol), "SC y");
         Assert.That(results[17].Z, Is.EqualTo(-0.3808593750f).Within(Tol), "SC z");
         Assert.That(results[17].Confidence, Is.EqualTo(0.8581489351f).Within(Tol), "SC conf");
     }
@@ -220,7 +220,7 @@ public class PythonComparisonTest
 
         // Body center is index 18
         Assert.That(results[18].X, Is.EqualTo(0.5000000000f).Within(Tol), "BC x");
-        Assert.That(results[18].Y, Is.EqualTo(-0.6210937500f).Within(Tol), "BC y"); // Y negated for Unity
+        Assert.That(results[18].Y, Is.EqualTo(0.6210937500f).Within(Tol), "BC y");
         Assert.That(results[18].Z, Is.EqualTo(-0.3447265625f).Within(Tol), "BC z");
         Assert.That(results[18].Confidence, Is.EqualTo(0.7858349830f).Within(Tol), "BC conf");
     }
@@ -317,10 +317,10 @@ public class PythonComparisonTest
         engine.DecodeLandmarks(rawOutput);
         var results = engine.GetWorldResult();
 
-        // Body center Y should be below shoulder center Y (more negative in Unity Y-up)
-        float hipCenterY = -(engine.Landmarks[23].Y + engine.Landmarks[24].Y) / 2;
-        Assert.That(results[18].Y, Is.LessThan(results[17].Y), "BC.y < SC.y (Unity Y-up)");
-        Assert.That(results[18].Y, Is.GreaterThan(hipCenterY), "BC.y > hipCenter.y (Unity Y-up)");
+        // Body center Y should be between shoulder center Y and hip center Y
+        float hipCenterY = (engine.Landmarks[23].Y + engine.Landmarks[24].Y) / 2;
+        Assert.That(results[18].Y, Is.GreaterThan(results[17].Y), "BC.y > SC.y");
+        Assert.That(results[18].Y, Is.LessThan(hipCenterY), "BC.y < hipCenter.y");
 
         // Shoulder center X between left and right shoulders
         Assert.That(results[17].X, Is.GreaterThan(engine.Landmarks[11].X), "SC.x > LShoulder.x");
