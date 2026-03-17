@@ -93,8 +93,6 @@ public class AiliaMediapipePoseWorldLandmarks : IDisposable
         Texture2D roiTex = ExtractROIFromBoxGpu(camera, tex_width, tex_height, detectionBox.Value);
 
         // Preprocess ROI texture for estimator ([0,1] normalization)
-        // GetPixels32 returns B2T order (row 0 = bottom), but model expects T2B (row 0 = top).
-        // Flip Y so the model sees the same orientation as Python's T2B ROI.
         int estRes = MediapipePoseWorldEngine.ESTIMATOR_INPUT_RESOLUTION;
         Color32[] roiPixels = roiTex.GetPixels32();
         float[] estInput = new float[estRes * estRes * MediapipePoseWorldEngine.DETECTOR_INPUT_CHANNEL_COUNT];
@@ -104,7 +102,7 @@ public class AiliaMediapipePoseWorldLandmarks : IDisposable
             for (int x = 0; x < estRes; x++)
             {
                 int idx = (y * estRes + x) * 3;
-                Color32 c = roiPixels[(estRes - 1 - y) * estRes + x];
+                Color32 c = roiPixels[y * estRes + x];
                 estInput[idx + 0] = c.r * factor;
                 estInput[idx + 1] = c.g * factor;
                 estInput[idx + 2] = c.b * factor;
@@ -185,7 +183,8 @@ public class AiliaMediapipePoseWorldLandmarks : IDisposable
         {
             AiliaPoseEstimator.AILIAPoseEstimatorKeypoint keypoint = new AiliaPoseEstimator.AILIAPoseEstimatorKeypoint();
             keypoint.x = results[i].X;
-            keypoint.y = results[i].Y;
+            // World landmarks: negate Y to convert from model's Y-down (due to B2T ROI fed as T2B) to Unity Y-up
+            keypoint.y = world_cordinate ? -results[i].Y : results[i].Y;
             keypoint.z_local = results[i].Z;
             keypoint.score = results[i].Confidence;
             one_pose.points[i] = keypoint;
