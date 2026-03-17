@@ -454,6 +454,12 @@ public class MediapipePoseWorldEngine
         RoiBoxSize = boxSize;
         RoiRotation = rotation;
 
+        // If called only to set ROI parameters (e.g. GPU path), skip pixel extraction
+        if (pixels.Length < srcWidth * srcHeight)
+        {
+            return (null, 0, 0);
+        }
+
         // Compute perspective transform (rotated rect -> 256x256)
         // Using cv2.boxPoints equivalent for rotated rect
         float halfSize = boxSize / 2.0f;
