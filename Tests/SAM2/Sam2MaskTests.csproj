@@ -26,6 +26,7 @@
   <!-- Shared files from ImageSegmentation (same logic as Unity) -->
   <ItemGroup>
     <Compile Include="../../Assets/AXIP/AILIA-MODELS/ImageSegmentation/Sam2InferenceEngine.cs" Link="Shared/Sam2InferenceEngine.cs" />
+    <Compile Include="../../Assets/AXIP/AILIA-MODELS/ImageSegmentation/Sam2PretrainedWeights.cs" Link="Shared/Sam2PretrainedWeights.cs" />
     <Compile Include="../../Assets/AXIP/AILIA-MODELS/ImageSegmentation/Sam2Processor.cs" Link="Shared/Sam2Processor.cs" />
   </ItemGroup>
 

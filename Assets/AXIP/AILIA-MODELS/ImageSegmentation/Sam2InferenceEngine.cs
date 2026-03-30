@@ -156,6 +156,12 @@ public class Sam2InferenceEngine
 
     public int TargetSize { get; set; } = 1024;
 
+    /// <summary>
+    /// Model variant for selecting pretrained no_mem_embed weights.
+    /// Default: v2_1_hiera_l (matches the hiera_l ONNX models).
+    /// </summary>
+    public Sam2ModelVariant ModelVariant { get; set; } = Sam2ModelVariant.v2_1_hiera_l;
+
     private List<Vector2Int> clickPoints = new();
     private List<bool> clickPointLabels = new();
     private Rect boxCoords = new();
@@ -487,10 +493,17 @@ public class Sam2InferenceEngine
         float[][,,] visionFeats = PrepareBackboneFeatures(backboneFpn);
 
         // Python SAM2: vision_feats[-1] = vision_feats[-1] + no_mem_embed
-        // no_mem_embed shape: (1, 1, 256), added to lowest-resolution features.
-        // In ailia-models Python, this is trunc_normal((1, 1, 256), std=0.02).
-        // The trained PyTorch value is close to zero, so we use zeros here.
-        // This matches the nn.Parameter(torch.zeros(1, 1, hidden_dim)) initialization.
+        // no_mem_embed shape: (1, 1, 256), broadcast-added to lowest-resolution features.
+        // Pretrained weights extracted from SAM2/SAM2.1 checkpoints via pretrained_weights.npz.
+        float[] noMemEmbed = Sam2PretrainedWeights.GetNoMemEmbed(ModelVariant);
+        {
+            float[,,] lastFeat = visionFeats[visionFeats.Length - 1];
+            int spatialSize = lastFeat.GetLength(0);
+            int channels = lastFeat.GetLength(2);
+            for (int hw = 0; hw < spatialSize; hw++)
+                for (int c = 0; c < channels; c++)
+                    lastFeat[hw, 0, c] += noMemEmbed[c];
+        }
 
         (int H, int W)[] bbFeatSizes = { (256, 256), (128, 128), (64, 64) };
 
