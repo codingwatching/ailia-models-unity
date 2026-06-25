@@ -110,13 +110,13 @@ namespace ailiaSDK
 					}
 				}
 				if (modelType == VisionLanguageModelSampleModels.gemma4_E2B){
-					modelPrepared = llm.Open(asset_path + "/gemma-4-E2B-it-Q4_K_M.gguf", 2048);
+					modelPrepared = llm.Open(asset_path + "/gemma-4-E2B-it-Q4_K_M.gguf", 16384);
 					if (modelPrepared){
 						modelPrepared = llm.OpenMultimodalProjector(asset_path + "/gemma-4-E2B-it-mmproj-F16.gguf");
 					}
 				}
 				if (modelType == VisionLanguageModelSampleModels.gemma4_E4B){
-					modelPrepared = llm.Open(asset_path + "/gemma-4-E4B-it-Q4_K_M.gguf", 2048);
+					modelPrepared = llm.Open(asset_path + "/gemma-4-E4B-it-Q4_K_M.gguf", 16384);
 					if (modelPrepared){
 						modelPrepared = llm.OpenMultimodalProjector(asset_path + "/gemma-4-E4B-it-mmproj-F16.gguf");
 					}
