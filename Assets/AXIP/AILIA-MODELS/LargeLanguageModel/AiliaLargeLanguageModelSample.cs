@@ -21,6 +21,8 @@ namespace ailiaSDK
 			gemma3_4b,
 			gemma3n_E2B,
 			gemma3n_E4B,
+			gemma4_E2B,
+			gemma4_E4B,
 			llama3_2_3b,
 		}
 
@@ -98,6 +100,12 @@ namespace ailiaSDK
 			if (modelType == LargeLanguageModelSampleModels.gemma3n_E4B){
 				urlList.Add(new ModelDownloadURL() { folder_path = "gemma", file_name = "gemma-3n-E4B-it-Q4_K_M.gguf" });
 			}
+			if (modelType == LargeLanguageModelSampleModels.gemma4_E2B){
+				urlList.Add(new ModelDownloadURL() { folder_path = "gemma", file_name = "gemma-4-E2B-it-Q4_K_M.gguf" });
+			}
+			if (modelType == LargeLanguageModelSampleModels.gemma4_E4B){
+				urlList.Add(new ModelDownloadURL() { folder_path = "gemma", file_name = "gemma-4-E4B-it-Q4_K_M.gguf" });
+			}
 			if (modelType == LargeLanguageModelSampleModels.llama3_2_3b){
 				urlList.Add(new ModelDownloadURL() { folder_path = "llama-3", file_name = "Llama-3.2-3B-Instruct-Q4_K_M.gguf" });
 			}
@@ -120,6 +128,12 @@ namespace ailiaSDK
 				}
 				if (modelType == LargeLanguageModelSampleModels.gemma3n_E4B){
 					modelPrepared = llm.Open(asset_path + "/gemma-3n-E4B-it-Q4_K_M.gguf");
+				}
+				if (modelType == LargeLanguageModelSampleModels.gemma4_E2B){
+					modelPrepared = llm.Open(asset_path + "/gemma-4-E2B-it-Q4_K_M.gguf");
+				}
+				if (modelType == LargeLanguageModelSampleModels.gemma4_E4B){
+					modelPrepared = llm.Open(asset_path + "/gemma-4-E4B-it-Q4_K_M.gguf");
 				}
 				if (modelType == LargeLanguageModelSampleModels.llama3_2_3b){
 					modelPrepared = llm.Open(asset_path + "/Llama-3.2-3B-Instruct-Q4_K_M.gguf");
