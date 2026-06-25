@@ -130,10 +130,10 @@ namespace ailiaSDK
 					modelPrepared = llm.Open(asset_path + "/gemma-3n-E4B-it-Q4_K_M.gguf");
 				}
 				if (modelType == LargeLanguageModelSampleModels.gemma4_E2B){
-					modelPrepared = llm.Open(asset_path + "/gemma-4-E2B-it-Q4_K_M.gguf", 16384);
+					modelPrepared = llm.Open(asset_path + "/gemma-4-E2B-it-Q4_K_M.gguf");
 				}
 				if (modelType == LargeLanguageModelSampleModels.gemma4_E4B){
-					modelPrepared = llm.Open(asset_path + "/gemma-4-E4B-it-Q4_K_M.gguf", 16384);
+					modelPrepared = llm.Open(asset_path + "/gemma-4-E4B-it-Q4_K_M.gguf");
 				}
 				if (modelType == LargeLanguageModelSampleModels.llama3_2_3b){
 					modelPrepared = llm.Open(asset_path + "/Llama-3.2-3B-Instruct-Q4_K_M.gguf");
