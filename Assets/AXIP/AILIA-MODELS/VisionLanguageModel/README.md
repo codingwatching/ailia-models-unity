@@ -5,6 +5,8 @@ This folder demonstrates running quantized GGUF VLMs locally with image understa
 ## Supported Models
 
 - Gemma 3 4B (IT, Q4_K_M) + mmproj-model-f16
+- Gemma 4 E2B (IT, Q4_K_M) + mmproj-F16
+- Gemma 4 E4B (IT, Q4_K_M) + mmproj-F16
 
 ## Script Behavior
 
