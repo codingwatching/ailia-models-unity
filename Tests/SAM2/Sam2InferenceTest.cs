@@ -10,11 +10,11 @@
  *
  * The inference pipeline matches SegmentAnything2Model.cs:
  *   1. PreprocessImage (bilinear resize, normalize)
- *   2. RunEncoder -> PrepareBackboneFeatures -> feats
+ *   2. RunEncoder -> PrepareEncoderFeatures (includes no_mem_embed)
  *   3. ApplyCoordinateScaling -> RunPromptEncoder
  *   4. RunDecoder -> PostprocessMasks -> ConvertToBoolMasks
  *
- * Note: no_mem_embed is NOT added (single-image mode).
+ * Note: no_mem_embed pretrained weights are added to vision_feats[-1] via PrepareEncoderFeatures.
  */
 
 using NUnit.Framework;
@@ -172,52 +172,11 @@ public class Sam2InferenceTest
         Console.WriteLine($"  backbone_fpn_1: [{encOut.Fpn1Shape.N},{encOut.Fpn1Shape.C},{encOut.Fpn1Shape.H},{encOut.Fpn1Shape.W}]");
         Console.WriteLine($"  backbone_fpn_2: [{encOut.Fpn2Shape.N},{encOut.Fpn2Shape.C},{encOut.Fpn2Shape.H},{encOut.Fpn2Shape.W}]");
 
-        // Step 2: Prepare backbone features
-        // (same logic as SegmentAnything2Model.RunEmbedding)
-        float[,,,] fpn0_4d = logic.ReshapeTo4D(encOut.BackboneFpn0,
-            encOut.Fpn0Shape.N, encOut.Fpn0Shape.C, encOut.Fpn0Shape.H, encOut.Fpn0Shape.W);
-        float[,,,] fpn1_4d = logic.ReshapeTo4D(encOut.BackboneFpn1,
-            encOut.Fpn1Shape.N, encOut.Fpn1Shape.C, encOut.Fpn1Shape.H, encOut.Fpn1Shape.W);
-        float[,,,] fpn2_4d = logic.ReshapeTo4D(encOut.BackboneFpn2,
-            encOut.Fpn2Shape.N, encOut.Fpn2Shape.C, encOut.Fpn2Shape.H, encOut.Fpn2Shape.W);
-
-        float[][,,,] backboneFpn = new[] { fpn0_4d, fpn1_4d, fpn2_4d };
-        float[][,,] visionFeats = logic.PrepareBackboneFeatures(backboneFpn);
-
-        // Note: no_mem_embed is NOT added for single-image inference
-        // (fixed bug: previously TruncNormal random noise was added here)
-
-        (int H, int W)[] bbFeatSizes = { (256, 256), (128, 128), (64, 64) };
-
-        float[][,,,] featsArray = new float[visionFeats.Length][,,,];
-        for (int i = 0; i < visionFeats.Length; i++)
-        {
-            int revIdx = visionFeats.Length - 1 - i;
-            float[,,] feat = visionFeats[revIdx];
-            (int fH, int fW) = bbFeatSizes[revIdx];
-            int HW = feat.GetLength(0);
-            int C = feat.GetLength(2);
-
-            float[,,] transposed = new float[1, C, HW];
-            for (int hw = 0; hw < HW; hw++)
-                for (int c = 0; c < C; c++)
-                    transposed[0, c, hw] = feat[hw, 0, c];
-
-            float[,,,] reshaped = new float[1, C, fH, fW];
-            for (int hw = 0; hw < HW; hw++)
-            {
-                int h = hw / fW;
-                int w = hw % fW;
-                for (int c = 0; c < C; c++)
-                    reshaped[0, c, h, w] = transposed[0, c, hw];
-            }
-            featsArray[i] = reshaped;
-        }
-        Array.Reverse(featsArray);
-
-        float[] imageEmbFlat = logic.Flatten4D(featsArray[^1]);
-        float[] highResFeat0 = logic.Flatten4D(featsArray[0]);
-        float[] highResFeat1 = logic.Flatten4D(featsArray[1]);
+        // Step 2: Prepare backbone features + add no_mem_embed
+        // (uses PrepareEncoderFeatures which includes pretrained no_mem_embed weights)
+        var (imageEmbFlat, highResFeatsResult) = logic.PrepareEncoderFeatures(encOut);
+        float[] highResFeat0 = highResFeatsResult[0];
+        float[] highResFeat1 = highResFeatsResult[1];
 
         // Step 3: Coordinate scaling + Prompt encoder
         float[,] rawCoords = new float[,] { { CLICK_X, CLICK_Y } };
