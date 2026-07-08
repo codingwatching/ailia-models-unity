@@ -153,8 +153,6 @@ public class AiliaVoiceSample : MonoBehaviour
 			urlList.Add(new ModelDownloadURL() { folder_path = "g2p_cn", file_name = "user.dict.utf8" });
 			urlList.Add(new ModelDownloadURL() { folder_path = "g2p_cn", file_name = "idf.utf8" });
 			urlList.Add(new ModelDownloadURL() { folder_path = "g2p_cn", file_name = "stop_words.utf8" });
-			urlList.Add(new ModelDownloadURL() { folder_path = "g2p_cn", file_name = "chinese-roberta.onnx" });
-			urlList.Add(new ModelDownloadURL() { folder_path = "g2p_cn", file_name = "vocab.txt" });
 			if (IsV2() || IsV3() || IsV2Pro()){
 				urlList.Add(new ModelDownloadURL() { folder_path = "g2pw/1.1", file_name = "g2pW.onnx" });
 				urlList.Add(new ModelDownloadURL() { folder_path = "g2pw/1.1", file_name = "POLYPHONIC_CHARS.txt" });
@@ -180,6 +178,10 @@ public class AiliaVoiceSample : MonoBehaviour
 			urlList.Add(new ModelDownloadURL() { folder_path = "gpt-sovits-v2", file_name = "t2s_sdec.opt.onnx", local_name = "v2_t2s_sdec.opt.onnx" });
 			urlList.Add(new ModelDownloadURL() { folder_path = "gpt-sovits-v2", file_name = "vits.onnx", local_name = "v2_vits.onnx" });
 			urlList.Add(new ModelDownloadURL() { folder_path = "gpt-sovits-v2", file_name = "cnhubert.onnx", local_name = "v2_cnhubert.onnx" });
+			if (IsChinese()){
+				urlList.Add(new ModelDownloadURL() { folder_path = "gpt-sovits-v2", file_name = "chinese-roberta.onnx" });
+				urlList.Add(new ModelDownloadURL() { folder_path = "gpt-sovits-v2", file_name = "vocab.txt" });
+			}
 		}
 		if (IsV3()){
 			urlList.Add(new ModelDownloadURL() { folder_path = "gpt-sovits-v3", file_name = "t2s_encoder.onnx", local_name = "v3_t2s_encoder.onnx" });
@@ -189,6 +191,10 @@ public class AiliaVoiceSample : MonoBehaviour
 			urlList.Add(new ModelDownloadURL() { folder_path = "gpt-sovits-v3", file_name = "vq_model.onnx" });
 			urlList.Add(new ModelDownloadURL() { folder_path = "gpt-sovits-v3", file_name = "vq_cfm.onnx" });
 			urlList.Add(new ModelDownloadURL() { folder_path = "gpt-sovits-v3", file_name = "bigvgan_model.onnx" });
+			if (IsChinese()){
+				urlList.Add(new ModelDownloadURL() { folder_path = "gpt-sovits-v3", file_name = "chinese-roberta.onnx" });
+				urlList.Add(new ModelDownloadURL() { folder_path = "gpt-sovits-v3", file_name = "vocab.txt" });
+			}
 		}
 		if (IsV2Pro() && !IsV2ProDistill()){
 			urlList.Add(new ModelDownloadURL() { folder_path = "gpt-sovits-v2-pro", file_name = "t2s_encoder.onnx", local_name = "v2pro_t2s_encoder.onnx" });
@@ -197,11 +203,15 @@ public class AiliaVoiceSample : MonoBehaviour
 			urlList.Add(new ModelDownloadURL() { folder_path = "gpt-sovits-v2-pro", file_name = "cnhubert.onnx", local_name = "v2pro_cnhubert.onnx" });
 			urlList.Add(new ModelDownloadURL() { folder_path = "gpt-sovits-v2-pro", file_name = "vits.onnx", local_name = "v2pro_vits.onnx" });
 			urlList.Add(new ModelDownloadURL() { folder_path = "gpt-sovits-v2-pro", file_name = "sv.onnx", local_name = "v2pro_sv.onnx" });
+			if (IsChinese()){
+				urlList.Add(new ModelDownloadURL() { folder_path = "gpt-sovits-v2-pro", file_name = "chinese-roberta.onnx" });
+				urlList.Add(new ModelDownloadURL() { folder_path = "gpt-sovits-v2-pro", file_name = "vocab.txt" });
+			}
 		}
 		if (IsV2ProDistill()){
-			urlList.Add(new ModelDownloadURL() { folder_path = "gpt-sovits-v2-pro-distill", file_name = "t2s_encoder_distill_base.onnx", local_name = "v2pro_distill_t2s_encoder.onnx" });
-			urlList.Add(new ModelDownloadURL() { folder_path = "gpt-sovits-v2-pro-distill", file_name = "t2s_fsdec_distill_base.onnx", local_name = "v2pro_distill_t2s_fsdec.onnx" });
-			urlList.Add(new ModelDownloadURL() { folder_path = "gpt-sovits-v2-pro-distill", file_name = "t2s_sdec_distill_base.opt.onnx", local_name = "v2pro_distill_t2s_sdec.opt.onnx" });
+			urlList.Add(new ModelDownloadURL() { folder_path = "gpt-sovits-v2-pro-distill", file_name = "t2s_encoder_distill_small.onnx", local_name = "v2pro_distill_t2s_encoder.onnx" });
+			urlList.Add(new ModelDownloadURL() { folder_path = "gpt-sovits-v2-pro-distill", file_name = "t2s_fsdec_distill_small.onnx", local_name = "v2pro_distill_t2s_fsdec.onnx" });
+			urlList.Add(new ModelDownloadURL() { folder_path = "gpt-sovits-v2-pro-distill", file_name = "t2s_sdec_distill_small.opt.onnx", local_name = "v2pro_distill_t2s_sdec.opt.onnx" });
 			urlList.Add(new ModelDownloadURL() { folder_path = "gpt-sovits-v2-pro", file_name = "cnhubert.onnx", local_name = "v2pro_cnhubert.onnx" });
 			urlList.Add(new ModelDownloadURL() { folder_path = "gpt-sovits-v2-pro", file_name = "vits.onnx", local_name = "v2pro_vits.onnx" });
 			urlList.Add(new ModelDownloadURL() { folder_path = "gpt-sovits-v2-pro", file_name = "sv.onnx", local_name = "v2pro_sv.onnx" });
@@ -258,17 +268,23 @@ public class AiliaVoiceSample : MonoBehaviour
 				status = voice.OpenGPTSoVITSV1ModelFile(path+"t2s_encoder.onnx", path+"t2s_fsdec.onnx", path+"t2s_sdec.opt3.onnx", path+"vits.onnx", path+"cnhubert.onnx");
 				break;
 			case TextToSpeechSampleModels.gpt_sovits_v2_japanese:
+				status = voice.OpenGPTSoVITSV2ModelFile(path+"v2_t2s_encoder.onnx", path+"v2_t2s_fsdec.onnx", path+"v2_t2s_sdec.opt.onnx", path+"v2_vits.onnx", path+"v2_cnhubert.onnx", null, null);
+				break;
 			case TextToSpeechSampleModels.gpt_sovits_v2_english:
 			case TextToSpeechSampleModels.gpt_sovits_v2_chinese:
 				status = voice.OpenGPTSoVITSV2ModelFile(path+"v2_t2s_encoder.onnx", path+"v2_t2s_fsdec.onnx", path+"v2_t2s_sdec.opt.onnx", path+"v2_vits.onnx", path+"v2_cnhubert.onnx", path+"chinese-roberta.onnx", path+"vocab.txt");
 				break;
 			case TextToSpeechSampleModels.gpt_sovits_v3_japanese:
 			case TextToSpeechSampleModels.gpt_sovits_v3_english:
+				status = voice.OpenGPTSoVITSV3ModelFile(path+"v3_t2s_encoder.onnx", path+"v3_t2s_fsdec.onnx", path+"v3_t2s_sdec.opt.onnx", path+"v3_cnhubert.onnx", path+"vq_model.onnx", path+"vq_cfm.onnx", path+"bigvgan_model.onnx", null, null);
+				break;
 			case TextToSpeechSampleModels.gpt_sovits_v3_chinese:
 				status = voice.OpenGPTSoVITSV3ModelFile(path+"v3_t2s_encoder.onnx", path+"v3_t2s_fsdec.onnx", path+"v3_t2s_sdec.opt.onnx", path+"v3_cnhubert.onnx", path+"vq_model.onnx", path+"vq_cfm.onnx", path+"bigvgan_model.onnx", path+"chinese-roberta.onnx", path+"vocab.txt");
 				break;
 			case TextToSpeechSampleModels.gpt_sovits_v2_pro_japanese:
 			case TextToSpeechSampleModels.gpt_sovits_v2_pro_english:
+				status = voice.OpenGPTSoVITSV2ProModelFile(path+"v2pro_t2s_encoder.onnx", path+"v2pro_t2s_fsdec.onnx", path+"v2pro_t2s_sdec.opt.onnx", path+"v2pro_cnhubert.onnx", path+"v2pro_vits.onnx", path+"v2pro_sv.onnx", null, null);
+				break;
 			case TextToSpeechSampleModels.gpt_sovits_v2_pro_chinese:
 				status = voice.OpenGPTSoVITSV2ProModelFile(path+"v2pro_t2s_encoder.onnx", path+"v2pro_t2s_fsdec.onnx", path+"v2pro_t2s_sdec.opt.onnx", path+"v2pro_cnhubert.onnx", path+"v2pro_vits.onnx", path+"v2pro_sv.onnx", path+"chinese-roberta.onnx", path+"vocab.txt");
 				break;
@@ -310,6 +326,9 @@ public class AiliaVoiceSample : MonoBehaviour
 		}
 
 		Debug.Log("Features : "+ text);
+		if (text == "") {
+			return;
+		}
 
 		var context = SynchronizationContext.Current;
 
@@ -380,8 +399,12 @@ public class AiliaVoiceSample : MonoBehaviour
 	}
 
 	public void Speak(){
-		queue_text = input_field.text;
+		if (input_field.text == "") {
+			return;
+		}
+		queue_text = "" + input_field.text;
 		Debug.Log("Queue : " + queue_text);
+		input_field.text = "";
 	}
 
 	public void Replay(){
