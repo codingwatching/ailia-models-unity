@@ -268,9 +268,9 @@ public class AiliaVoiceSample : MonoBehaviour
 				status = voice.OpenGPTSoVITSV1ModelFile(path+"t2s_encoder.onnx", path+"t2s_fsdec.onnx", path+"t2s_sdec.opt3.onnx", path+"vits.onnx", path+"cnhubert.onnx");
 				break;
 			case TextToSpeechSampleModels.gpt_sovits_v2_japanese:
+			case TextToSpeechSampleModels.gpt_sovits_v2_english:
 				status = voice.OpenGPTSoVITSV2ModelFile(path+"v2_t2s_encoder.onnx", path+"v2_t2s_fsdec.onnx", path+"v2_t2s_sdec.opt.onnx", path+"v2_vits.onnx", path+"v2_cnhubert.onnx", null, null);
 				break;
-			case TextToSpeechSampleModels.gpt_sovits_v2_english:
 			case TextToSpeechSampleModels.gpt_sovits_v2_chinese:
 				status = voice.OpenGPTSoVITSV2ModelFile(path+"v2_t2s_encoder.onnx", path+"v2_t2s_fsdec.onnx", path+"v2_t2s_sdec.opt.onnx", path+"v2_vits.onnx", path+"v2_cnhubert.onnx", path+"chinese-roberta.onnx", path+"vocab.txt");
 				break;
