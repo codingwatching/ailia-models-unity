@@ -55,6 +55,7 @@ public class AiliaVoiceSample : MonoBehaviour
 
 
 	private bool isProcessing = false;
+	private string prevCompositionString = "";
 
 	// Version helpers
 	private bool IsV1(){
@@ -199,9 +200,9 @@ public class AiliaVoiceSample : MonoBehaviour
 			urlList.Add(new ModelDownloadURL() { folder_path = "gpt-sovits-v2-pro", file_name = "sv.onnx", local_name = "v2pro_sv.onnx" });
 		}
 		if (IsV2ProDistill()){
-			urlList.Add(new ModelDownloadURL() { folder_path = "gpt-sovits-v2-pro-distill", file_name = "t2s_encoder_distill_base.onnx", local_name = "v2pro_distill_t2s_encoder.onnx" });
-			urlList.Add(new ModelDownloadURL() { folder_path = "gpt-sovits-v2-pro-distill", file_name = "t2s_fsdec_distill_base.onnx", local_name = "v2pro_distill_t2s_fsdec.onnx" });
-			urlList.Add(new ModelDownloadURL() { folder_path = "gpt-sovits-v2-pro-distill", file_name = "t2s_sdec_distill_base.opt.onnx", local_name = "v2pro_distill_t2s_sdec.opt.onnx" });
+			urlList.Add(new ModelDownloadURL() { folder_path = "gpt-sovits-v2-pro-distill", file_name = "t2s_encoder_distill_small.onnx", local_name = "v2pro_distill_t2s_encoder.onnx" });
+			urlList.Add(new ModelDownloadURL() { folder_path = "gpt-sovits-v2-pro-distill", file_name = "t2s_fsdec_distill_small.onnx", local_name = "v2pro_distill_t2s_fsdec.onnx" });
+			urlList.Add(new ModelDownloadURL() { folder_path = "gpt-sovits-v2-pro-distill", file_name = "t2s_sdec_distill_small.opt.onnx", local_name = "v2pro_distill_t2s_sdec.opt.onnx" });
 			urlList.Add(new ModelDownloadURL() { folder_path = "gpt-sovits-v2-pro", file_name = "cnhubert.onnx", local_name = "v2pro_cnhubert.onnx" });
 			urlList.Add(new ModelDownloadURL() { folder_path = "gpt-sovits-v2-pro", file_name = "vits.onnx", local_name = "v2pro_vits.onnx" });
 			urlList.Add(new ModelDownloadURL() { folder_path = "gpt-sovits-v2-pro", file_name = "sv.onnx", local_name = "v2pro_sv.onnx" });
@@ -371,6 +372,12 @@ public class AiliaVoiceSample : MonoBehaviour
 		}else{
 			processing.SetActive(false);
 		}
+		if (input_field != null && input_field.isFocused &&
+			(Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter)) &&
+			prevCompositionString.Length == 0){
+			Speak();
+		}
+		prevCompositionString = Input.compositionString;
 		if (queue_text != ""){
 			if (initialized){
 				Infer(queue_text);
@@ -380,8 +387,12 @@ public class AiliaVoiceSample : MonoBehaviour
 	}
 
 	public void Speak(){
-		queue_text = input_field.text;
+		if (input_field.text == "") {
+			return;
+		}
+		queue_text = "" + input_field.text;
 		Debug.Log("Queue : " + queue_text);
+		input_field.text = "";
 	}
 
 	public void Replay(){
