@@ -326,6 +326,9 @@ public class AiliaVoiceSample : MonoBehaviour
 		}
 
 		Debug.Log("Features : "+ text);
+		if (text == "") {
+			return;
+		}
 
 		var context = SynchronizationContext.Current;
 
